@@ -1,13 +1,13 @@
 services:
   db:
     image: postgres:16
-    container_name: petapp_postgres
+    container_name: petcare_postgres
     environment:
-      POSTGRES_DB: petapp
-      POSTGRES_USER: petapp_user
-      POSTGRES_PASSWORD: petapp_password
+      POSTGRES_DB: petcare
+      POSTGRES_USER: petcare_user
+      POSTGRES_PASSWORD: petcare_password
     ports:
-      - "5432:5432"
+      - "5433:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
 
