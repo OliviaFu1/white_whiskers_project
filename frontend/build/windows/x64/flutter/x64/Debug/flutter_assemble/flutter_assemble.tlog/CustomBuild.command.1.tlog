@@ -1,0 +1,28 @@
+^C:\USERS\LENOVO\DUKE\3SPRING\WHITE_WHISKERS_PROJECT\FRONTEND\BUILD\WINDOWS\X64\CMAKEFILES\1F33C84CEC2E98972879420A7CB06D31\FLUTTER_WINDOWS.DLL.RULE
+setlocal
+"C:\Program Files\Microsoft Visual Studio\18\Community\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\bin\cmake.exe" -E env FLUTTER_ROOT=C:\Users\lenovo\Installations\flutter PROJECT_DIR=C:\Users\lenovo\Duke\3Spring\white_whiskers_project\frontend FLUTTER_ROOT=C:\Users\lenovo\Installations\flutter FLUTTER_EPHEMERAL_DIR=C:\Users\lenovo\Duke\3Spring\white_whiskers_project\frontend\windows\flutter\ephemeral PROJECT_DIR=C:\Users\lenovo\Duke\3Spring\white_whiskers_project\frontend FLUTTER_TARGET=C:\Users\lenovo\Duke\3Spring\white_whiskers_project\frontend\lib\main.dart DART_DEFINES=RkxVVFRFUl9WRVJTSU9OPTMuMzguNw==,RkxVVFRFUl9DSEFOTkVMPXN0YWJsZQ==,RkxVVFRFUl9HSVRfVVJMPWh0dHBzOi8vZ2l0aHViLmNvbS9mbHV0dGVyL2ZsdXR0ZXIuZ2l0,RkxVVFRFUl9GUkFNRVdPUktfUkVWSVNJT049M2I2MmVmYzJhMw==,RkxVVFRFUl9FTkdJTkVfUkVWSVNJT049NzhmYzMwMTJlNA==,RkxVVFRFUl9EQVJUX1ZFUlNJT049My4xMC43 DART_OBFUSCATION=false TRACK_WIDGET_CREATION=true TREE_SHAKE_ICONS=false PACKAGE_CONFIG=C:\Users\lenovo\Duke\3Spring\white_whiskers_project\frontend\.dart_tool\package_config.json C:/Users/lenovo/Installations/flutter/packages/flutter_tools/bin/tool_backend.bat windows-x64 Debug
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal & call :cmErrorLevel %errorlevel% & goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd
+^C:\USERS\LENOVO\DUKE\3SPRING\WHITE_WHISKERS_PROJECT\FRONTEND\BUILD\WINDOWS\X64\CMAKEFILES\63C69F5F45E64988C157FE4E2066903D\FLUTTER_ASSEMBLE.RULE
+setlocal
+:cmEnd
+endlocal & call :cmErrorLevel %errorlevel% & goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd
+^C:\USERS\LENOVO\DUKE\3SPRING\WHITE_WHISKERS_PROJECT\FRONTEND\WINDOWS\FLUTTER\CMAKELISTS.TXT
+setlocal
+"C:\Program Files\Microsoft Visual Studio\18\Community\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\bin\cmake.exe" -SC:/Users/lenovo/Duke/3Spring/white_whiskers_project/frontend/windows -BC:/Users/lenovo/Duke/3Spring/white_whiskers_project/frontend/build/windows/x64 --check-stamp-file C:/Users/lenovo/Duke/3Spring/white_whiskers_project/frontend/build/windows/x64/flutter/CMakeFiles/generate.stamp
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal & call :cmErrorLevel %errorlevel% & goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd

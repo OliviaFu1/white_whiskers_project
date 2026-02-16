@@ -1,0 +1,10 @@
+^C:\USERS\LENOVO\DUKE\3SPRING\WHITE_WHISKERS_PROJECT\FRONTEND\BUILD\WINDOWS\X64\CMAKEFILES\14BA2CDE5A76D7717DC46C017EADB0C8\GENERATE.STAMP.RULE
+setlocal
+"C:\Program Files\Microsoft Visual Studio\18\Community\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\bin\cmake.exe" -SC:/Users/lenovo/Duke/3Spring/white_whiskers_project/frontend/windows -BC:/Users/lenovo/Duke/3Spring/white_whiskers_project/frontend/build/windows/x64 --check-stamp-list CMakeFiles/generate.stamp.list --vs-solution-file C:/Users/lenovo/Duke/3Spring/white_whiskers_project/frontend/build/windows/x64/frontend.sln
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal & call :cmErrorLevel %errorlevel% & goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd
