@@ -30,6 +30,14 @@ source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
+#### (On Windows)
+```bash
+cd backend
+python -m venv .venv
+.venv\Scripts\activate
+pip install -r requirements.txt
+```
+
 ### 4. Run database migrations and start the backend
 ```bash
 python manage.py migrate
