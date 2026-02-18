@@ -29,3 +29,8 @@ class UserRegisterSerializer(serializers.ModelSerializer):
         user.set_password(password)
         user.save()
         return user
+
+class UserMeUpdateSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = User
+        fields = ("name", "photo_url")

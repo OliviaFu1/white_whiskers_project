@@ -49,7 +49,7 @@ class _LoginPageState extends State<LoginPage> {
       await TokenStore.save(access: access, refresh: refresh);
 
       if (!mounted) return;
-      Navigator.pushReplacementNamed(context, '/profile');
+      Navigator.pushReplacementNamed(context, '/post-login');
     } catch (e) {
       setState(() => serverErrorText = e.toString());
     } finally {

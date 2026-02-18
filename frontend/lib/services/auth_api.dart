@@ -63,6 +63,31 @@ class AuthApi {
     return jsonDecode(res.body) as Map<String, dynamic>;
   }
 
+    static Future<Map<String, dynamic>> updateMe({
+    required String accessToken,
+    String? name,
+    String? photoUrl,
+  }) async {
+    final body = <String, dynamic>{};
+    if (name != null) body["name"] = name;
+    if (photoUrl != null) body["photo_url"] = photoUrl;
+
+    final res = await http.patch(
+      _u("/api/accounts/me/"),
+      headers: {
+        "Authorization": "Bearer $accessToken",
+        "Content-Type": "application/json",
+      },
+      body: jsonEncode(body),
+    );
+
+    if (res.statusCode < 200 || res.statusCode >= 300) {
+      throw _extractError(res.body) ?? "Failed to update profile (${res.statusCode})";
+    }
+
+    return jsonDecode(res.body) as Map<String, dynamic>;
+  }
+
   static String? _extractError(String body) {
     try {
       final decoded = jsonDecode(body);
