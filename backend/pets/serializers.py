@@ -48,32 +48,32 @@ class PetCreateSerializer(serializers.ModelSerializer):
         read_only_fields = ["id"]
 
     def validate(self, attrs):
-    errors = {}
+        errors = {}
 
-    # Required strings: present + non-blank after trim
-    required_str = ["name", "species", "breed_text", "sex"]
-    for k in required_str:
-        v = attrs.get(k, None)
-        if v is None or (isinstance(v, str) and v.strip() == ""):
-            errors[k] = "This field is required."
+        # Required strings: present + non-blank after trim
+        required_str = ["name", "species", "breed_text", "sex"]
+        for k in required_str:
+            v = attrs.get(k, None)
+            if v is None or (isinstance(v, str) and v.strip() == ""):
+                errors[k] = "This field is required."
 
-    # Required bool: must be True or False (not None / missing)
-    if attrs.get("spayed_neutered", None) is None:
-        errors["spayed_neutered"] = "This field is required."
+        # Required bool: must be True or False (not None / missing)
+        if attrs.get("spayed_neutered", None) is None:
+            errors["spayed_neutered"] = "This field is required."
 
-    age_years = attrs.get("age_years")
-    birthdate = attrs.get("birthdate")
+        age_years = attrs.get("age_years")
+        birthdate = attrs.get("birthdate")
 
-    # require at least one of age_years or birthdate
-    if age_years is None and birthdate is None:
-        errors["age_years"] = "Provide age_years or birthdate."
-        errors["birthdate"] = "Provide age_years or birthdate."
+        # require at least one of age_years or birthdate
+        if age_years is None and birthdate is None:
+            errors["age_years"] = "Provide age_years or birthdate."
+            errors["birthdate"] = "Provide age_years or birthdate."
 
-    # optional: sanity check age
-    if age_years is not None and age_years > 40:
-        errors["age_years"] = "Unrealistic age_years (max 40)."
+        # optional: sanity check age
+        if age_years is not None and age_years > 40:
+            errors["age_years"] = "Unrealistic age_years (max 40)."
 
-    if errors:
-        raise serializers.ValidationError(errors)
+        if errors:
+            raise serializers.ValidationError(errors)
 
-    return attrs
+        return attrs
