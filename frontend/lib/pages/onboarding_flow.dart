@@ -35,8 +35,39 @@ class _OnboardingFlowState extends State<OnboardingFlow> {
   bool _ownerTouched = false;
   bool _petTouched = false;
 
+  // save name on step 0
+  bool _savingName = false;
+  String? _nameSaveError;
+
+  // final submit
   bool _savingFinal = false;
   String? _finalError;
+
+  Future<void> _saveNameAndNext() async {
+    if (_savingName) return;
+
+    setState(() {
+      _savingName = true;
+      _nameSaveError = null;
+    });
+
+    try {
+      final access = await TokenStore.readAccess();
+      if (access == null) throw "Session expired. Please log in again.";
+
+      await AuthApi.updateMe(accessToken: access, name: ownerName.text.trim());
+
+      if (!mounted) return;
+      setState(() => _savingName = false);
+      _next();
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _savingName = false;
+        _nameSaveError = e.toString();
+      });
+    }
+  }
 
   Future<void> _finalizeAndGo(String route) async {
     if (_savingFinal) return;
@@ -50,10 +81,7 @@ class _OnboardingFlowState extends State<OnboardingFlow> {
       final access = await TokenStore.readAccess();
       if (access == null) throw "No access token found.";
 
-      // 1) save owner name
-      await AuthApi.updateMe(accessToken: access, name: ownerName.text.trim());
-
-      // 2) create pet
+      // create pet
       final petBody = <String, dynamic>{
         "name": petName.text.trim(),
         // species is required by your model; ensure you send something
@@ -128,11 +156,11 @@ class _OnboardingFlowState extends State<OnboardingFlow> {
           showBack: false,
           onBack: null,
           canNext: _ownerValid,
-          onNext: _next,
+          onNext: _saveNameAndNext,
           onSkip: null,
-          helperError: (_ownerTouched && !_ownerValid)
-              ? "Name is required"
-              : null,
+          helperError:
+              _nameSaveError ??
+              ((_ownerTouched && !_ownerValid) ? "Name is required" : null),
           bg: bg,
           titleColor: titleColor,
           accent: accent,
