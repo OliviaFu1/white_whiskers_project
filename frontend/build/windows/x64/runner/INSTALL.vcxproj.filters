@@ -1,0 +1,13 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="18.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <CustomBuild Include="C:\Users\lenovo\Duke\3Spring\white_whiskers_project\frontend\build\windows\x64\CMakeFiles\df5a20f66b79a60897ebf512576ff0dd\INSTALL_force.rule">
+      <Filter>CMake Rules</Filter>
+    </CustomBuild>
+  </ItemGroup>
+  <ItemGroup>
+    <Filter Include="CMake Rules">
+      <UniqueIdentifier>{FE1DC25A-5FAE-3BBA-8697-D57D148F3AA5}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+</Project>
