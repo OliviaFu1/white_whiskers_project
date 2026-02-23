@@ -41,23 +41,29 @@ backend/media/
 *.iws
 .idea/
 
-# Flutter/Dart/Pub related
-**/doc/api/
-**/ios/Flutter/.last_build_id
+# Flutter/Dart/Pub
 .dart_tool/
-.flutter-plugins-dependencies
-.pub-cache/
+.packages
 .pub/
-/build/
-/coverage/
+build/
+.flutter-plugins
+.flutter-plugins-dependencies
 
-# Symbolication related
-app.*.symbols
+# iOS
+ios/Flutter/Flutter.framework
+ios/Flutter/Flutter.podspec
+ios/Pods/
+ios/.symlinks/
+ios/Runner.xcworkspace/
+ios/DerivedData/
 
-# Obfuscation related
-app.*.map.json
+# Android
+android/.gradle/
+android/app/build/
 
-# Android Studio will place build artifacts here
-/android/app/debug
-/android/app/profile
-/android/app/release
+# Generated plugin registrants (C++/Swift/CMake)
+**/generated_plugin_registrant.*
+**/generated_plugins.cmake
+**/GeneratedPluginRegistrant.*
+**/Flutter/ephemeral/
+**/*.xcworkspacedata
