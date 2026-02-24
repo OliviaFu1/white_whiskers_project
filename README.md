@@ -1,51 +1,77 @@
 # 🐾 White Whiskers Mobile App
-Welcome to the **White Whiskers Mobile App** repository!  
+
+Welcome to the **White Whiskers Mobile App** repository!
 
 ---
 
-## Tech Stack
+## 🧱 Tech Stack
 
-- **Backend**: Django, Django REST Framework, PostgreSQL
+- **Backend**: Django, Django REST Framework (Dockerized)
 - **Frontend**: Flutter (iOS / Android)
-- **Database**: PostgreSQL (via Docker)
+- **Database**: PostgreSQL (Docker)
+- **Containerization**: Docker & Docker Compose
 
 ---
 
-## Initialization
+# 🚀 Initialization (First Time Setup)
+
 Follow these steps **once** after cloning the repository.
 
-### 1. Create your local `.env` file
-### 2. Start the database (Docker)
+---
 
-```bash
-docker compose up -d
-docker ps
+## 1️⃣ Create your local `.env` file
+
+Create a `.env` file in the project root with:
+
+```env
+DJANGO_SECRET_KEY=your-secret-key
+DJANGO_DEBUG=True
+
+POSTGRES_DB=petcare
+POSTGRES_USER=petcare_user
+POSTGRES_PASSWORD=petcare_password
+POSTGRES_HOST=db
+POSTGRES_PORT=5432
 ```
 
-### 3. Backend setup (Django)
+---
+
+## 2️⃣ Start Backend + Database (Docker)
+
+From the project root:
+
 ```bash
-cd backend
-python3 -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
+docker compose up --build
 ```
 
-#### (On Windows)
-```bash
-cd backend
-python -m venv .venv
-.venv\Scripts\activate
-pip install -r requirements.txt
+This will:
+
+- Start PostgreSQL
+- Wait for database readiness
+- Run Django migrations automatically
+- Collect static files
+- Start the Django development server
+
+Backend will be available at:
+
+```
+http://localhost:8000
 ```
 
-### 4. Run database migrations and start the backend
+---
+
+## 3️⃣ Create Superuser (One Time)
+
+In a new terminal:
+
 ```bash
-python manage.py migrate
-python manage.py createsuperuser
-python manage.py runserver
+docker compose run --rm backend python manage.py createsuperuser
 ```
 
-### 5. Frontend setup (Flutter)
+---
+
+## 4️⃣ Frontend Setup (Flutter)
+
 ```bash
 cd frontend
 flutter pub get
@@ -54,38 +80,72 @@ flutter run
 
 ---
 
-## Daily Development Workflow
-Start the database
+# 🔁 Daily Development Workflow
+
+## Start everything
+
 ```bash
-docker compose up -d
+docker compose up
 ```
 
-Start the backend
-```bash
-cd backend
-source .venv/bin/activate
-python manage.py runserver
-```
+## Stop everything
 
-Start the frontend
 ```bash
-cd frontend
-flutter run
+docker compose down
 ```
 
 ---
 
-## Database Changes (Django Migrations)
-**When you change models**
-1. Update Django models
-2. Run:
-```bash
-python manage.py makemigrations
-python manage.py migrate
-```
-3. Commit the generated migration files
+# 🗄️ Database Notes
 
-**After pulling changes**
+### Reset the database completely
+
+⚠️ This deletes all data.
+
 ```bash
-python manage.py migrate
+docker compose down -v
+docker compose up --build
+```
+
+---
+
+# 🧩 Database Changes (Django Migrations)
+
+### When you change models:
+
+```bash
+docker compose run --rm backend python manage.py makemigrations
+docker compose run --rm backend python manage.py migrate
+```
+
+Commit the generated migration files.
+
+---
+
+### After pulling new changes:
+
+```bash
+docker compose run --rm backend python manage.py migrate
+```
+
+---
+
+# 🛠️ Useful Commands
+
+### View logs
+
+```bash
+docker compose logs -f
+```
+
+### Access Django shell
+
+```bash
+docker compose run --rm backend python manage.py shell
+```
+
+### Rebuild containers
+
+```bash
+docker compose up --build
 ```
