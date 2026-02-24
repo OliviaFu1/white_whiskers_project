@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:frontend/views/models/pet.dart';
+import 'package:frontend/models/pet.dart';
 
 final Pet _defaultPet = Pet(
   id: '0',

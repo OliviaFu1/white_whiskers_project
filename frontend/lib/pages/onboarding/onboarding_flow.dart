@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
 import 'onboarding_widget.dart';
-import '../services/auth_api.dart';
-import '../services/token_store.dart';
+import '../../services/auth_api.dart';
+import '../../services/token_store.dart';
 
 enum AgeInputMode { age, birthdate }
 

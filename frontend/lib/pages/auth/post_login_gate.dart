@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
-import '../services/auth_api.dart';
-import '../services/token_store.dart';
-import 'onboarding_flow.dart';
-import 'mypet_page.dart';
+import 'package:frontend/pages/app_shell.dart';
+import '../../services/auth_api.dart';
+import '../../services/token_store.dart';
+import '../onboarding/onboarding_flow.dart';
+// import '../main_pages/mypet_page.dart';
 
 class PostLoginGate extends StatefulWidget {
   const PostLoginGate({super.key});
@@ -44,19 +45,19 @@ class _PostLoginGateState extends State<PostLoginGate> {
   @override
   Widget build(BuildContext context) {
     if (isLoading) {
-      return const Scaffold(
-        body: Center(child: CircularProgressIndicator()),
-      );
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
     if (errorText != null) {
       return Scaffold(
-        body: Center(child: Text(errorText!, style: const TextStyle(color: Colors.red))),
+        body: Center(
+          child: Text(errorText!, style: const TextStyle(color: Colors.red)),
+        ),
       );
     }
 
     final name = (me?["name"] ?? "").toString().trim();
     final isFirstTime = name.isEmpty;
 
-    return isFirstTime ? const OnboardingFlow() : const MypetPage();
+    return isFirstTime ? const OnboardingFlow() : const AppShell();
   }
 }

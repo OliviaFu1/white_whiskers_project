@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import '../services/auth_api.dart';
-import '../services/token_store.dart';
+import '../../services/auth_api.dart';
+import '../../services/token_store.dart';
 
 class MypetPage extends StatefulWidget {
   const MypetPage({super.key});

@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
-import 'pages/login_page.dart';
-import 'pages/register_page.dart';
-import 'pages/mypet_page.dart';
-import 'pages/onboarding_flow.dart';
-import 'pages/post_login_gate.dart';
+import 'package:frontend/pages/app_shell.dart';
+import 'pages/auth/login_page.dart';
+import 'pages/auth/register_page.dart';
+import 'pages/main_pages/mypet_page.dart';
+import 'pages/onboarding/onboarding_flow.dart';
+import 'pages/auth/post_login_gate.dart';
 
 void main() => runApp(const MyApp());
 
