@@ -13,9 +13,6 @@
 migrate_working_dir/
 .vscode/
 
-# ===== Logs =====
-*.log
-
 # ===== Environment =====
 .env
 .env.*
@@ -24,7 +21,7 @@ migrate_working_dir/
 .pgdata/
 **/pgdata/
 
-# ===== Python / Django =====
+# ===== Python / Django (Backend) =====
 backend/.venv/
 backend/__pycache__/
 backend/**/*.pyc
@@ -34,36 +31,52 @@ backend/.pytest_cache/
 backend/staticfiles/
 backend/media/
 
-# ===== Flutter =====
-# IntelliJ related
+# ===== Flutter / Dart =====
+
+## IntelliJ / IDE
 *.iml
 *.ipr
 *.iws
 .idea/
 
-# Flutter/Dart/Pub
+## Dart / Pub
 .dart_tool/
 .packages
 .pub/
-build/
+.pub-cache/
 .flutter-plugins
 .flutter-plugins-dependencies
+build/
+coverage/
 
-# iOS
+## Documentation
+**/doc/api/
+
+## Symbolication
+app.*.symbols
+
+## Obfuscation
+app.*.map.json
+
+# ===== iOS =====
+ios/Flutter/.last_build_id
 ios/Flutter/Flutter.framework
 ios/Flutter/Flutter.podspec
 ios/Pods/
 ios/.symlinks/
 ios/Runner.xcworkspace/
 ios/DerivedData/
+**/*.xcworkspacedata
 
-# Android
+# ===== Android =====
 android/.gradle/
 android/app/build/
+/android/app/debug
+/android/app/profile
+/android/app/release
 
-# Generated plugin registrants (C++/Swift/CMake)
+# ===== Generated Plugin Registrants =====
 **/generated_plugin_registrant.*
 **/generated_plugins.cmake
 **/GeneratedPluginRegistrant.*
 **/Flutter/ephemeral/
-**/*.xcworkspacedata
