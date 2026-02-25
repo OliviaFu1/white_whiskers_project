@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
+import 'package:frontend/pages/app_shell.dart';
+import 'package:frontend/pages/assessment/assessment_page.dart';
 import 'onboarding_widget.dart';
 import '../../services/auth_api.dart';
 import '../../services/token_store.dart';
@@ -108,7 +110,7 @@ class _OnboardingFlowState extends State<OnboardingFlow> {
     }
   }
 
-  Future<void> _finalizeAndGo(String route) async {
+  Future<void> _finalizeAndGo(Widget page) async {
     if (_savingFinal) return;
 
     setState(() {
@@ -134,7 +136,11 @@ class _OnboardingFlowState extends State<OnboardingFlow> {
       await AuthApi.createPet(accessToken: access, body: petBody);
 
       if (!mounted) return;
-      Navigator.pushReplacementNamed(context, route);
+
+      Navigator.of(context).pushAndRemoveUntil(
+        MaterialPageRoute(builder: (_) => page),
+        (route) => false,
+      );
     } catch (e) {
       if (!mounted) return;
       setState(() {
@@ -258,8 +264,8 @@ class _OnboardingFlowState extends State<OnboardingFlow> {
           helperError: (!_sexValid && _sexTouched)
               ? "Sex is required"
               : ((!_spayedValid && _spayTouched)
-                  ? "Please select spayed/neutered"
-                  : null),
+                    ? "Please select spayed/neutered"
+                    : null),
           bg: bg,
           titleColor: titleColor,
           accent: accent,
@@ -309,10 +315,10 @@ class _OnboardingFlowState extends State<OnboardingFlow> {
           helperError: (!_ageModeValid && _ageModeTouched)
               ? "Please choose Age or Birthdate"
               : ((!_ageValueValid && _ageValueTouched)
-                  ? (ageMode == AgeInputMode.birthdate
-                      ? "Birthdate is required"
-                      : "Age is required")
-                  : null),
+                    ? (ageMode == AgeInputMode.birthdate
+                          ? "Birthdate is required"
+                          : "Age is required")
+                    : null),
           bg: bg,
           titleColor: titleColor,
           accent: accent,
@@ -357,8 +363,9 @@ class _OnboardingFlowState extends State<OnboardingFlow> {
           field: Column(
             children: [
               GestureDetector(
-                onTap:
-                    _savingFinal ? null : () => _finalizeAndGo('/assessment'),
+                onTap: _savingFinal
+                    ? null
+                    : () => _finalizeAndGo(const AssessmentPage()),
                 child: Text(
                   _savingFinal ? "saving..." : "start first assessment",
                   style: const TextStyle(
@@ -370,7 +377,9 @@ class _OnboardingFlowState extends State<OnboardingFlow> {
               ),
               const SizedBox(height: 14),
               GestureDetector(
-                onTap: _savingFinal ? null : () => _finalizeAndGo('/mypets'),
+                onTap: _savingFinal
+                    ? null
+                    : () => _finalizeAndGo(const AppShell()),
                 child: Text(
                   _savingFinal ? "saving..." : "Homepage",
                   style: const TextStyle(

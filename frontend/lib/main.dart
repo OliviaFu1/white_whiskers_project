@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:frontend/pages/app_shell.dart';
+// import 'package:frontend/pages/app_shell.dart';
 import 'pages/auth/login_page.dart';
 import 'pages/auth/register_page.dart';
 import 'pages/main_pages/mypet_page.dart';

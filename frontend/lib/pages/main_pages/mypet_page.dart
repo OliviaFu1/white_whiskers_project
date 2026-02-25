@@ -45,17 +45,11 @@ class _MypetPageState extends State<MypetPage> {
     }
   }
 
-  Future<void> _logout() async {
-    await TokenStore.clear();
-    if (!mounted) return;
-    Navigator.pushReplacementNamed(context, '/login');
-  }
-
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: bg,
-      body: SafeArea(
+    return Container(
+      color: bg,
+      child: SafeArea(
         child: isLoading
             ? const Center(child: CircularProgressIndicator())
             : errorText != null
@@ -78,18 +72,6 @@ class _MypetPageState extends State<MypetPage> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          const SizedBox(height: 12),
-
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              _circleIcon(Icons.person_outline, onTap: _logout), // temp logout
-              _circleIcon(Icons.emoji_events_outlined, onTap: () {}),
-            ],
-          ),
-
-          const SizedBox(height: 18),
-
           const Text(
             "My pets",
             style: TextStyle(
@@ -122,36 +104,7 @@ class _MypetPageState extends State<MypetPage> {
           _actionRow(Icons.add_circle_outline, "Add a new pet", onTap: () {}),
           _actionRow(Icons.group_outlined, "Add a family member", onTap: () {}),
           _actionRow(Icons.add_circle_outline, "Take a new test", onTap: () {}),
-
-          const Spacer(),
-
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-            children: const [
-              _BottomIcon(Icons.calendar_month_outlined, selected: false),
-              _BottomIcon(Icons.receipt_long_outlined, selected: false),
-              _BottomIcon(Icons.pets_outlined, selected: true), // current page
-            ],
-          ),
-
-          const SizedBox(height: 5),
         ],
-      ),
-    );
-  }
-
-  Widget _circleIcon(IconData icon, {required VoidCallback onTap}) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(22),
-      child: Container(
-        width: 44,
-        height: 44,
-        decoration: BoxDecoration(
-          shape: BoxShape.circle,
-          border: Border.all(color: muted),
-        ),
-        child: Icon(icon, color: muted),
       ),
     );
   }
@@ -324,31 +277,6 @@ class _MypetPageState extends State<MypetPage> {
       leading: Icon(icon, size: 20, color: muted),
       title: Text(label, style: const TextStyle(fontSize: 18, color: muted)),
       onTap: onTap,
-    );
-  }
-}
-
-class _BottomIcon extends StatelessWidget {
-  final IconData icon;
-  final bool selected;
-  const _BottomIcon(this.icon, {required this.selected});
-
-  @override
-  Widget build(BuildContext context) {
-    const active = Color(0xFFD88442);
-    const inactive = Color(0xFF676767);
-
-    final border = selected ? active : inactive;
-    final iconColor = selected ? active : inactive;
-
-    return Container(
-      width: 54,
-      height: 54,
-      decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        border: Border.all(color: border, width: selected ? 2 : 1),
-      ),
-      child: Icon(icon, color: iconColor),
     );
   }
 }

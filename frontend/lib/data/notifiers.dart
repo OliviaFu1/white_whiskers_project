@@ -7,5 +7,5 @@ final Pet _defaultPet = Pet(
   imageUrl: 'assets/images/test_pet.jpg',
 );
 
-ValueNotifier<int> selectedPageNotifier = ValueNotifier(0);
+ValueNotifier<int> selectedPageNotifier = ValueNotifier<int>(2);
 ValueNotifier<Pet> selectedPetNotificer = ValueNotifier<Pet>(_defaultPet);
