@@ -28,18 +28,26 @@ class _CalendarPageState extends State<CalendarPage> {
   // backend-driven statuses keyed by dateOnly
   Map<DateTime, DayStatus> _statusByDay = {};
 
-  bool _loadingMonth = false;
-  String? _monthError;
+  // dates that have at least one check-in
+  final Set<DateTime> _daysWithCheckin = {};
+
+  bool _loading = false;
+  String? _error;
 
   @override
   void initState() {
     super.initState();
-    _loadMonthStatuses(_focusedDay);
+    _loadAllCheckins();
   }
 
   @override
   Widget build(BuildContext context) {
-    final monthGoodPct = _computeGoodPctForFocusedMonth();
+    final today = _dateOnly(DateTime.now());
+    final hasCheckinToday = _daysWithCheckin.contains(today);
+
+    final (allPct, allN) = _computeGoodPctRange(endDayInclusive: today, daysBack: 0);
+    final (pct28, n28) = _computeGoodPctRange(endDayInclusive: today, daysBack: 28);
+    final (pct7, n7) = _computeGoodPctRange(endDayInclusive: today, daysBack: 7);
 
     return Container(
       color: bg,
@@ -53,8 +61,6 @@ class _CalendarPageState extends State<CalendarPage> {
                 lastDay: DateTime.utc(2030, 12, 31),
                 focusedDay: _focusedDay,
                 selectedDayPredicate: (day) => isSameDay(_selectedDay, day),
-
-                // direct to detail page (unchanged logic)
                 onDaySelected: (selectedDay, focusedDay) {
                   setState(() {
                     _selectedDay = selectedDay;
@@ -63,71 +69,51 @@ class _CalendarPageState extends State<CalendarPage> {
 
                   Navigator.of(context).push(
                     MaterialPageRoute(
-                      builder: (_) =>
-                          DayDetailsPage(date: _dateOnly(selectedDay)),
+                      builder: (_) => DayDetailsPage(date: _dateOnly(selectedDay)),
                     ),
                   );
                 },
-
                 calendarBuilders: CalendarBuilders(
-                  defaultBuilder: (context, day, focusedDay) {
-                    return _buildDayCell(day);
-                  },
-                  todayBuilder: (context, day, focusedDay) {
-                    return _buildDayCell(day, isToday: true);
-                  },
-                  selectedBuilder: (context, day, focusedDay) {
-                    return _buildDayCell(day, isSelected: true);
-                  },
+                  defaultBuilder: (context, day, focusedDay) => _buildDayCell(day),
+                  todayBuilder: (context, day, focusedDay) => _buildDayCell(day, isToday: true),
+                  selectedBuilder: (context, day, focusedDay) => _buildDayCell(day, isSelected: true),
                 ),
-
-                onPageChanged: (focusedDay) {
-                  setState(() {
-                    _focusedDay = focusedDay;
-                  });
-                  _loadMonthStatuses(focusedDay);
-                },
-
+                onPageChanged: (focusedDay) => setState(() => _focusedDay = focusedDay),
                 headerStyle: const HeaderStyle(formatButtonVisible: false),
               ),
 
-              const SizedBox(height: 15),
+              const SizedBox(height: 12),
 
-              // keep the same layout; just dynamic content
-              Text(
-                _loadingMonth
-                    ? "This month: …"
-                    : _monthError != null
-                    ? "This month: —"
-                    : "This month: ${monthGoodPct.toStringAsFixed(0)}% good",
-                style: const TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
+              _loading
+                  ? const _PctBlockLoading()
+                  : _PctBlock(
+                      error: _error,
+                      allPct: allPct,
+                      allN: allN,
+                      pct28: pct28,
+                      n28: n28,
+                      pct7: pct7,
+                      n7: n7,
+                    ),
 
-              if (_monthError != null) ...[
-                const SizedBox(height: 6),
-                Text(
-                  _monthError!,
-                  style: const TextStyle(fontSize: 12, color: Colors.redAccent),
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ],
-
-              const SizedBox(height: 15),
+              const SizedBox(height: 12),
 
               _actionRow(
                 Icons.check_circle_outline,
                 "Daily check-in",
-                onTap: () {
-                  Navigator.of(context).push(
+                iconColor: hasCheckinToday ? Colors.green : const Color(0xFF6F6A67),
+                onTap: () async {
+                  final changed = await Navigator.of(context).push<bool>(
                     MaterialPageRoute(builder: (_) => const DailyCheckinPage()),
                   );
+                  if (changed == true) {
+                    await _loadAllCheckins();
+                  }
                 },
               ),
+
               const SizedBox(height: 4),
+
               _actionRow(
                 Icons.medication_outlined,
                 "Medication",
@@ -149,19 +135,20 @@ class _CalendarPageState extends State<CalendarPage> {
     bool isSelected = false,
     bool isToday = false,
   }) {
-    final status = _statusByDay[_dateOnly(day)] ?? DayStatus.none;
+    final d0 = _dateOnly(day);
+    final status = _statusByDay[d0] ?? DayStatus.none;
 
-    final color = switch (status) {
+    final bgColor = switch (status) {
       DayStatus.good => goodColor,
       DayStatus.bad => badColor,
       DayStatus.neutral => neutralColor,
-      DayStatus.none => Colors.transparent, // or a very light gray
+      DayStatus.none => Colors.transparent,
     };
 
     return Container(
       margin: const EdgeInsets.all(4),
       decoration: BoxDecoration(
-        color: color,
+        color: bgColor,
         borderRadius: BorderRadius.circular(6),
         border: isSelected ? Border.all(color: Colors.black, width: 2) : null,
       ),
@@ -173,10 +160,10 @@ class _CalendarPageState extends State<CalendarPage> {
     );
   }
 
-  Future<void> _loadMonthStatuses(DateTime focused) async {
+  Future<void> _loadAllCheckins() async {
     setState(() {
-      _loadingMonth = true;
-      _monthError = null;
+      _loading = true;
+      _error = null;
     });
 
     try {
@@ -188,55 +175,67 @@ class _CalendarPageState extends State<CalendarPage> {
         petId: petId,
       );
 
-      // Convert to day-status map. If multiple checkins exist per day (different authors),
-      // combine with: bad > neutral > good.
-      final map = <DateTime, DayStatus>{};
+      final statusMap = <DateTime, DayStatus>{};
+      final daysWith = <DateTime>{};
 
       for (final c in checkins) {
         final dateStr = (c["checkin_date"] ?? "") as String;
         if (dateStr.isEmpty) continue;
 
         final d = _parseYyyyMmDd(dateStr);
+        daysWith.add(d);
+
         final rating = (c["day_rating"] ?? "neutral") as String;
         final s = _toDayStatus(rating);
 
-        map[d] = _combineDayStatus(map[d], s);
+        statusMap[d] = _combineDayStatus(statusMap[d], s);
       }
 
       setState(() {
-        _statusByDay = map;
+        _statusByDay = statusMap;
+        _daysWithCheckin
+          ..clear()
+          ..addAll(daysWith);
       });
     } catch (e) {
       setState(() {
-        _monthError = e.toString();
+        _error = e.toString();
         _statusByDay = {};
+        _daysWithCheckin.clear();
       });
     } finally {
-      if (mounted) {
-        setState(() {
-          _loadingMonth = false;
-        });
-      }
+      if (mounted) setState(() => _loading = false);
     }
   }
 
-  double _computeGoodPctForFocusedMonth() {
-    final first = DateTime(_focusedDay.year, _focusedDay.month, 1);
-    final last = DateTime(_focusedDay.year, _focusedDay.month + 1, 0);
-
+  (double pct, int n) _computeGoodPctRange({
+    required DateTime endDayInclusive,
+    required int daysBack, // 0 => all-time
+  }) {
     int good = 0;
-    int totalWithData = 0;
+    int total = 0;
 
-    for (int d = 1; d <= last.day; d++) {
-      final day = DateTime(first.year, first.month, d);
-      final s = _statusByDay[_dateOnly(day)];
-      if (s == null) continue;
-      totalWithData++;
-      if (s == DayStatus.good) good++;
+    if (daysBack == 0) {
+      for (final s in _statusByDay.values) {
+        total++;
+        if (s == DayStatus.good) good++;
+      }
+      final pct = total == 0 ? 0.0 : 100.0 * good / total;
+      return (pct, total);
     }
 
-    if (totalWithData == 0) return 0;
-    return 100.0 * good / totalWithData;
+    final end = _dateOnly(endDayInclusive);
+    final start = _dateOnly(end.subtract(Duration(days: daysBack - 1)));
+
+    for (final entry in _statusByDay.entries) {
+      final d = entry.key;
+      if (d.isBefore(start) || d.isAfter(end)) continue;
+      total++;
+      if (entry.value == DayStatus.good) good++;
+    }
+
+    final pct = total == 0 ? 0.0 : 100.0 * good / total;
+    return (pct, total);
   }
 
   DayStatus _toDayStatus(String dayRating) {
@@ -253,12 +252,8 @@ class _CalendarPageState extends State<CalendarPage> {
   // bad > neutral > good
   DayStatus _combineDayStatus(DayStatus? existing, DayStatus incoming) {
     if (existing == null) return incoming;
-    if (existing == DayStatus.bad || incoming == DayStatus.bad) {
-      return DayStatus.bad;
-    }
-    if (existing == DayStatus.neutral || incoming == DayStatus.neutral) {
-      return DayStatus.neutral;
-    }
+    if (existing == DayStatus.bad || incoming == DayStatus.bad) return DayStatus.bad;
+    if (existing == DayStatus.neutral || incoming == DayStatus.neutral) return DayStatus.neutral;
     return DayStatus.good;
   }
 
@@ -266,11 +261,7 @@ class _CalendarPageState extends State<CalendarPage> {
 
   DateTime _parseYyyyMmDd(String s) {
     final parts = s.split("-");
-    return DateTime(
-      int.parse(parts[0]),
-      int.parse(parts[1]),
-      int.parse(parts[2]),
-    );
+    return DateTime(int.parse(parts[0]), int.parse(parts[1]), int.parse(parts[2]));
   }
 
   Future<String> _getAccessToken() async {
@@ -281,20 +272,91 @@ class _CalendarPageState extends State<CalendarPage> {
 
   Future<int> _getCurrentPetId() async {
     final petId = await PetStore.getCurrentPetId();
-    if (petId == null) {
-      throw "No pet selected.";
-    }
+    if (petId == null) throw "No pet selected.";
     return petId;
   }
 }
 
-Widget _actionRow(IconData icon, String label, {required VoidCallback onTap}) {
+class _PctBlockLoading extends StatelessWidget {
+  const _PctBlockLoading();
+
+  @override
+  Widget build(BuildContext context) {
+    const style = TextStyle(fontSize: 16, fontWeight: FontWeight.w500);
+    return const Column(
+      children: [
+        Text("All-time: …", style: style),
+        SizedBox(height: 6),
+        Text("Past 28 days: …", style: style),
+        SizedBox(height: 6),
+        Text("Past 7 days: …", style: style),
+      ],
+    );
+  }
+}
+
+class _PctBlock extends StatelessWidget {
+  final String? error;
+  final double allPct;
+  final int allN;
+  final double pct28;
+  final int n28;
+  final double pct7;
+  final int n7;
+
+  const _PctBlock({
+    required this.error,
+    required this.allPct,
+    required this.allN,
+    required this.pct28,
+    required this.n28,
+    required this.pct7,
+    required this.n7,
+  });
+
+  String _fmtPct(double pct) => "${pct.toStringAsFixed(0)}%";
+
+  @override
+  Widget build(BuildContext context) {
+    const style = TextStyle(fontSize: 16, fontWeight: FontWeight.w500);
+
+    final line28 =
+        n28 >= 15 ? "Past 28 days: ${_fmtPct(pct28)} good" : "Past 28 days: — (need 15 entries)";
+    final line7 = n7 >= 4 ? "Past 7 days: ${_fmtPct(pct7)} good" : "Past 7 days: — (need 4 entries)";
+
+    return Column(
+      children: [
+        Text("All-time: ${_fmtPct(allPct)} good", style: style),
+        const SizedBox(height: 6),
+        Text(line28, style: style),
+        const SizedBox(height: 6),
+        Text(line7, style: style),
+        if (error != null) ...[
+          const SizedBox(height: 6),
+          Text(
+            error!,
+            style: const TextStyle(fontSize: 12, color: Colors.redAccent),
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+Widget _actionRow(
+  IconData icon,
+  String label, {
+  required VoidCallback onTap,
+  Color iconColor = const Color(0xFF6F6A67),
+}) {
   return ListTile(
     dense: true,
     visualDensity: const VisualDensity(vertical: -3),
     contentPadding: EdgeInsets.zero,
     minLeadingWidth: 20,
-    leading: Icon(icon, size: 20, color: const Color(0xFF6F6A67)),
+    leading: Icon(icon, size: 20, color: iconColor),
     title: Text(
       label,
       style: const TextStyle(fontSize: 18, color: Color(0xFF6F6A67)),

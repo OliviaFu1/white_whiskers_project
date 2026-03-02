@@ -280,8 +280,7 @@ class _JournalPageState extends State<JournalPage> {
                           decoration: BoxDecoration(
                             borderRadius: BorderRadius.circular(10),
                             border: Border.all(
-                              // avoids withValues() (newer API / can be confusing)
-                              color: muted.withOpacity(0.35),
+                              color: muted.withValues(),
                               width: 1.2,
                             ),
                           ),

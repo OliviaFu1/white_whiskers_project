@@ -6,9 +6,9 @@ class CalendarApi {
   static Uri _u(String path) => Uri.parse("${AppConfig.apiBaseUrl}$path");
 
   static Map<String, String> _authHeaders(String accessToken) => {
-        "Authorization": "Bearer $accessToken",
-        "Content-Type": "application/json",
-      };
+    "Authorization": "Bearer $accessToken",
+    "Content-Type": "application/json",
+  };
 
   static Future<List<Map<String, dynamic>>> listDailyCheckins({
     required String accessToken,
@@ -77,6 +77,24 @@ class CalendarApi {
     if (res.statusCode < 200 || res.statusCode >= 300) {
       throw _extractError(res.body) ??
           "Failed to create daily checkin (${res.statusCode})";
+    }
+    return jsonDecode(res.body) as Map<String, dynamic>;
+  }
+
+  static Future<Map<String, dynamic>> updateDailyCheckin({
+    required String accessToken,
+    required int id,
+    required Map<String, dynamic> body,
+  }) async {
+    final res = await http.patch(
+      _u("/api/calendar/daily-checkins/$id/"),
+      headers: _authHeaders(accessToken),
+      body: jsonEncode(body),
+    );
+
+    if (res.statusCode < 200 || res.statusCode >= 300) {
+      throw _extractError(res.body) ??
+          "Failed to update daily checkin (${res.statusCode})";
     }
     return jsonDecode(res.body) as Map<String, dynamic>;
   }

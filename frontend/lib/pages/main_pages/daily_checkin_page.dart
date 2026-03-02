@@ -16,12 +16,32 @@ class _DailyCheckinPageState extends State<DailyCheckinPage> {
   static const titleColor = Color(0xFFD88442);
   static const muted = Color(0xFF676767);
 
-  DateTime _selectedDate = DateTime.now();
-  String _rating = "neutral"; // good|neutral|bad
-  final TextEditingController _notesCtl = TextEditingController();
+  final _notesCtl = TextEditingController();
 
-  bool _submitting = false;
+  String _rating = "neutral";
+  String _initialRating = "neutral";
+  String _initialNotes = "";
+
+  int? _checkinId; // today's existing row id if any
+
+  bool _loading = true;
+  bool _saving = false;
   String? _error;
+
+  DateTime get _today => DateTime.now();
+  String _yyyyMmDd(DateTime d) =>
+      "${d.year.toString().padLeft(4, '0')}-"
+      "${d.month.toString().padLeft(2, '0')}-"
+      "${d.day.toString().padLeft(2, '0')}";
+
+  bool get _dirty =>
+      _rating != _initialRating || _notesCtl.text.trim() != _initialNotes;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadToday();
+  }
 
   @override
   void dispose() {
@@ -29,66 +49,117 @@ class _DailyCheckinPageState extends State<DailyCheckinPage> {
     super.dispose();
   }
 
-  Future<void> _pickDate() async {
-    final now = DateTime.now();
-    final initial = DateTime(_selectedDate.year, _selectedDate.month, _selectedDate.day);
-
-    final picked = await showDatePicker(
-      context: context,
-      initialDate: initial,
-      firstDate: DateTime(2020, 1, 1),
-      lastDate: DateTime(now.year, now.month, now.day), // allow any previous days, not future
-    );
-
-    if (picked == null) return;
-    setState(() => _selectedDate = picked);
-  }
-
-  String _yyyyMmDd(DateTime d) =>
-      "${d.year.toString().padLeft(4, '0')}-"
-      "${d.month.toString().padLeft(2, '0')}-"
-      "${d.day.toString().padLeft(2, '0')}";
-
-  Future<void> _submit() async {
+  Future<void> _loadToday() async {
     setState(() {
-      _submitting = true;
+      _loading = true;
       _error = null;
     });
 
     try {
       final access = await TokenStore.readAccess();
       if (access == null) throw "No access token found.";
+      final petId = await PetStore.getCurrentPetId();
+      if (petId == null) throw "No pet selected.";
 
+      // simplest: pull list and find today's entry
+      final checkins = await CalendarApi.listDailyCheckins(
+        accessToken: access,
+        petId: petId,
+      );
+
+      final todayStr = _yyyyMmDd(_today);
+      Map<String, dynamic>? today;
+      for (final c in checkins) {
+        if ((c["checkin_date"] ?? "") == todayStr) {
+          today = Map<String, dynamic>.from(c);
+          break;
+        }
+      }
+
+      final rating = (today?["day_rating"] ?? "neutral") as String;
+      final notes = (today?["notes"] ?? "") as String;
+      final id = today?["id"]; // DRF pk
+
+      final normalized = (rating == "good" || rating == "bad" || rating == "neutral")
+          ? rating
+          : "neutral";
+
+      setState(() {
+        _checkinId = (id is int) ? id : (id is String ? int.tryParse(id) : null);
+
+        _rating = normalized;
+        _notesCtl.text = notes;
+
+        _initialRating = normalized;
+        _initialNotes = notes.trim();
+      });
+    } catch (e) {
+      setState(() => _error = e.toString());
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  Future<void> _save() async {
+    if (!_dirty) return;
+
+    setState(() {
+      _saving = true;
+      _error = null;
+    });
+
+    try {
+      final access = await TokenStore.readAccess();
+      if (access == null) throw "No access token found.";
       final petId = await PetStore.getCurrentPetId();
       if (petId == null) throw "No pet selected.";
 
       final body = <String, dynamic>{
         "pet_id": petId,
-        "checkin_date": _yyyyMmDd(_selectedDate),
+        "checkin_date": _yyyyMmDd(_today), // today only
         "day_rating": _rating,
         "notes": _notesCtl.text.trim(),
       };
 
-      await CalendarApi.createDailyCheckin(
-        accessToken: access,
-        body: body,
-      );
+      if (_checkinId == null) {
+        // Create (first time today)
+        final res = await CalendarApi.createDailyCheckin(
+          accessToken: access,
+          body: body,
+        );
+        final id = res["id"];
+        _checkinId = (id is int) ? id : (id is String ? int.tryParse(id) : null);
+      } else {
+        // Update (today already exists)
+        await CalendarApi.updateDailyCheckin(
+          accessToken: access,
+          id: _checkinId!,
+          body: body,
+        );
+      }
 
       if (!mounted) return;
+
+      setState(() {
+        _initialRating = _rating;
+        _initialNotes = _notesCtl.text.trim();
+      });
+
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text("Daily check-in saved.")),
       );
-      Navigator.of(context).pop(true); // return success
+
+      Navigator.of(context).pop(true); // let CalendarPage refresh
     } catch (e) {
       setState(() => _error = e.toString());
     } finally {
-      if (mounted) setState(() => _submitting = false);
+      if (mounted) setState(() => _saving = false);
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final dateStr = _yyyyMmDd(_selectedDate);
+    final dateStr = _yyyyMmDd(_today);
 
     return Scaffold(
       backgroundColor: bg,
@@ -101,116 +172,96 @@ class _DailyCheckinPageState extends State<DailyCheckinPage> {
       body: SafeArea(
         child: Padding(
           padding: const EdgeInsets.all(18),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              const Text(
-                "How was today?",
-                style: TextStyle(
-                  fontSize: 26,
-                  fontWeight: FontWeight.w800,
-                  color: titleColor,
-                ),
-              ),
-              const SizedBox(height: 14),
-
-              // Date row
-              InkWell(
-                onTap: _submitting ? null : _pickDate,
-                borderRadius: BorderRadius.circular(12),
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(12),
-                    boxShadow: const [
-                      BoxShadow(
-                        blurRadius: 10,
-                        offset: Offset(0, 5),
-                        color: Color(0x22000000),
-                      )
-                    ],
-                  ),
-                  child: Row(
-                    children: [
-                      const Icon(Icons.calendar_today_outlined, color: muted, size: 18),
-                      const SizedBox(width: 10),
-                      Text(
-                        dateStr,
-                        style: const TextStyle(fontSize: 16, color: muted, fontWeight: FontWeight.w600),
-                      ),
-                      const Spacer(),
-                      const Icon(Icons.chevron_right, color: muted),
-                    ],
-                  ),
-                ),
-              ),
-
-              const SizedBox(height: 14),
-
-              // Rating selector (minimal UI, no new packages)
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(12),
-                  boxShadow: const [
-                    BoxShadow(
-                      blurRadius: 10,
-                      offset: Offset(0, 5),
-                      color: Color(0x22000000),
-                    )
-                  ],
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+          child: _loading
+              ? const Center(child: CircularProgressIndicator())
+              : Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                     const Text(
-                      "Rating",
-                      style: TextStyle(color: accent, fontWeight: FontWeight.w700),
-                    ),
-                    const SizedBox(height: 10),
-                    Row(
-                      children: [
-                        _pill("Good", "good"),
-                        const SizedBox(width: 10),
-                        _pill("Neutral", "neutral"),
-                        const SizedBox(width: 10),
-                        _pill("Bad", "bad"),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-
-              const SizedBox(height: 14),
-
-              // Notes
-              Expanded(
-                child: Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(12),
-                    boxShadow: const [
-                      BoxShadow(
-                        blurRadius: 10,
-                        offset: Offset(0, 5),
-                        color: Color(0x22000000),
-                      )
-                    ],
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text(
-                        "Notes (optional)",
-                        style: TextStyle(color: accent, fontWeight: FontWeight.w700),
+                      "How was today?",
+                      style: TextStyle(
+                        fontSize: 26,
+                        fontWeight: FontWeight.w800,
+                        color: titleColor,
                       ),
-                      const SizedBox(height: 8),
-                      Expanded(
+                    ),
+                    const SizedBox(height: 12),
+
+                    // Date display (read-only)
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(12),
+                        boxShadow: const [
+                          BoxShadow(
+                            blurRadius: 10,
+                            offset: Offset(0, 5),
+                            color: Color(0x22000000),
+                          )
+                        ],
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.calendar_today_outlined, color: muted, size: 18),
+                          const SizedBox(width: 10),
+                          Text(
+                            dateStr,
+                            style: const TextStyle(fontSize: 16, color: muted, fontWeight: FontWeight.w600),
+                          ),
+                          const Spacer(),
+                          if (_checkinId != null) const Icon(Icons.check_circle, color: Colors.green, size: 18),
+                        ],
+                      ),
+                    ),
+
+                    const SizedBox(height: 14),
+
+                    // Rating pills
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(12),
+                        boxShadow: const [
+                          BoxShadow(
+                            blurRadius: 10,
+                            offset: Offset(0, 5),
+                            color: Color(0x22000000),
+                          )
+                        ],
+                      ),
+                      child: Row(
+                        children: [
+                          _pill("Good", "good"),
+                          const SizedBox(width: 10),
+                          _pill("Neutral", "neutral"),
+                          const SizedBox(width: 10),
+                          _pill("Bad", "bad"),
+                        ],
+                      ),
+                    ),
+
+                    const SizedBox(height: 14),
+
+                    // Notes
+                    Expanded(
+                      child: Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(12),
+                          boxShadow: const [
+                            BoxShadow(
+                              blurRadius: 10,
+                              offset: Offset(0, 5),
+                              color: Color(0x22000000),
+                            )
+                          ],
+                        ),
                         child: TextField(
                           controller: _notesCtl,
+                          onChanged: (_) => setState(() {}),
                           maxLines: null,
                           expands: true,
                           decoration: const InputDecoration(
@@ -219,38 +270,35 @@ class _DailyCheckinPageState extends State<DailyCheckinPage> {
                           ),
                         ),
                       ),
+                    ),
+
+                    if (_error != null) ...[
+                      const SizedBox(height: 10),
+                      Text(_error!, style: const TextStyle(color: Colors.redAccent)),
                     ],
-                  ),
-                ),
-              ),
 
-              if (_error != null) ...[
-                const SizedBox(height: 10),
-                Text(_error!, style: const TextStyle(color: Colors.redAccent)),
-              ],
+                    const SizedBox(height: 12),
 
-              const SizedBox(height: 12),
-
-              ElevatedButton(
-                onPressed: _submitting ? null : _submit,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: accent,
-                  padding: const EdgeInsets.symmetric(vertical: 14),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                ),
-                child: _submitting
-                    ? const SizedBox(
-                        height: 18,
-                        width: 18,
-                        child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                      )
-                    : const Text(
-                        "Save",
-                        style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: Colors.white),
+                    ElevatedButton(
+                      onPressed: (_saving || !_dirty) ? null : _save,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: accent,
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                       ),
-              ),
-            ],
-          ),
+                      child: _saving
+                          ? const SizedBox(
+                              height: 18,
+                              width: 18,
+                              child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                            )
+                          : Text(
+                              _dirty ? "Save changes" : "Saved",
+                              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: Colors.white),
+                            ),
+                    ),
+                  ],
+                ),
         ),
       ),
     );
@@ -260,7 +308,7 @@ class _DailyCheckinPageState extends State<DailyCheckinPage> {
     final selected = _rating == value;
     return Expanded(
       child: InkWell(
-        onTap: _submitting ? null : () => setState(() => _rating = value),
+        onTap: _saving ? null : () => setState(() => _rating = value),
         borderRadius: BorderRadius.circular(10),
         child: Container(
           padding: const EdgeInsets.symmetric(vertical: 10),
