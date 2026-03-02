@@ -70,7 +70,7 @@ class JournalEntry(models.Model):
         db_index=True,
     )
 
-    entry_time = models.DateTimeField(default=timezone.now, db_index=True)
+    entry_date = models.DateField()
     title = models.CharField(max_length=200, blank=True, default="")
     text = models.TextField(blank=True, default="")
     photo_url = models.URLField(blank=True, default="")
@@ -94,7 +94,7 @@ class JournalEntry(models.Model):
 
     class Meta:
         indexes = [
-            models.Index(fields=["pet", "entry_time"]),
-            models.Index(fields=["visibility", "entry_time"]),
+            models.Index(fields=["pet", "entry_date"]),
+            models.Index(fields=["visibility", "entry_date"]),
         ]
-        ordering = ["-entry_time", "-created_at"]
+        ordering = ["-entry_date", "-created_at"]

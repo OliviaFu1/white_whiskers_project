@@ -45,7 +45,7 @@ class JournalEntryViewSet(viewsets.ModelViewSet):
         # Day filter: match a specific calendar day
         day = parse_date(self.request.query_params.get("date", "") or "")
         if day:
-            qs = qs.filter(entry_time__date=day)
+            qs = qs.filter(entry_date=day)
 
         tag = self.request.query_params.get("tag")
         if tag:
@@ -56,7 +56,7 @@ class JournalEntryViewSet(viewsets.ModelViewSet):
         qs = qs.filter()
         qs = qs.filter(Q(visibility="shared") | Q(author=user))
 
-        return qs.order_by("-entry_time", "-created_at")
+        return qs.order_by("-entry_date", "-created_at")
 
     def perform_create(self, serializer):
         serializer.save(author=self.request.user)

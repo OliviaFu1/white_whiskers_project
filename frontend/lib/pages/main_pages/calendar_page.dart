@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:table_calendar/table_calendar.dart';
 import 'package:frontend/pages/main_pages/medication_page.dart';
 import 'package:frontend/pages/main_pages/daily_checkin_page.dart';
+import 'package:frontend/pages/main_pages/day_details_page.dart';
 import 'package:frontend/services/calendar_api.dart';
 import 'package:frontend/services/token_store.dart';
 import 'package:frontend/services/pet_store.dart';
@@ -269,102 +270,6 @@ class _CalendarPageState extends State<CalendarPage> {
       int.parse(parts[0]),
       int.parse(parts[1]),
       int.parse(parts[2]),
-    );
-  }
-
-  Future<String> _getAccessToken() async {
-    final access = await TokenStore.readAccess();
-    if (access == null) throw "No access token found.";
-    return access;
-  }
-
-  Future<int> _getCurrentPetId() async {
-    final petId = await PetStore.getCurrentPetId();
-    if (petId == null) {
-      throw "No pet selected.";
-    }
-    return petId;
-  }
-}
-
-// Keep this in the same file for now (no page logic changes).
-class DayDetailsPage extends StatefulWidget {
-  final DateTime date;
-  const DayDetailsPage({super.key, required this.date});
-
-  @override
-  State<DayDetailsPage> createState() => _DayDetailsPageState();
-}
-
-class _DayDetailsPageState extends State<DayDetailsPage> {
-  late final String _yyyyMmDd;
-
-  bool _loading = true;
-  String? _err;
-
-  List<Map<String, dynamic>> _checkins = [];
-  List<Map<String, dynamic>> _journals = [];
-
-  @override
-  void initState() {
-    super.initState();
-    _yyyyMmDd = widget.date.toIso8601String().split('T').first;
-    _loadDayDetails();
-  }
-
-  Future<void> _loadDayDetails() async {
-    setState(() {
-      _loading = true;
-      _err = null;
-    });
-
-    try {
-      final accessToken = await _getAccessToken();
-      final petId = await _getCurrentPetId();
-
-      final checkins = await CalendarApi.listDailyCheckins(
-        accessToken: accessToken,
-        petId: petId,
-        date: _yyyyMmDd,
-      );
-
-      final journals = await CalendarApi.listJournalEntries(
-        accessToken: accessToken,
-        petId: petId,
-        date: _yyyyMmDd,
-      );
-
-      setState(() {
-        _checkins = checkins;
-        _journals = journals;
-      });
-    } catch (e) {
-      setState(() {
-        _err = e.toString();
-      });
-    } finally {
-      if (mounted) {
-        setState(() {
-          _loading = false;
-        });
-      }
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: Text(_yyyyMmDd)),
-      body: Center(
-        child: _loading
-            ? const CircularProgressIndicator()
-            : _err != null
-            ? Text(_err!)
-            : Text(
-                "Checkins: ${_checkins.length}\nJournals: ${_journals.length}",
-                textAlign: TextAlign.center,
-              ),
-      ),
     );
   }
 

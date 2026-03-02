@@ -31,7 +31,7 @@ class JournalEntrySerializer(serializers.ModelSerializer):
             "id",
             "pet_id",
             "author_user_id",
-            "entry_time",
+            "entry_date",
             "title",
             "text",
             "photo_url",
