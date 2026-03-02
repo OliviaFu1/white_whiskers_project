@@ -29,4 +29,5 @@ urlpatterns = [
     # App APIs
     path("api/accounts/", include("accounts.urls")),
     path("api/pets/", include("pets.urls")),
+    path("api/calendar/", include("pet_calendar.urls")),
 ]
