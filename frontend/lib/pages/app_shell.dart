@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:frontend/data/notifiers.dart';
+import 'package:frontend/state/notifiers.dart';
+import 'package:frontend/models/app_notification.dart';
 import 'package:frontend/models/pet.dart';
 import 'package:frontend/pages/main_pages/calendar_page.dart';
 import 'package:frontend/pages/main_pages/journal_page.dart';
@@ -7,7 +8,7 @@ import 'package:frontend/pages/main_pages/mypet_page.dart';
 import 'package:frontend/pages/notifications_page.dart';
 import 'package:frontend/pages/profile_page.dart';
 
-List<Widget> pages = [CalendarPage(), JournalPage(), MypetPage()];
+// List<Widget> pages = [CalendarPage(), JournalPage(), MypetPage()];
 
 class AppShell extends StatelessWidget {
   const AppShell({super.key});
@@ -16,10 +17,17 @@ class AppShell extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: const AppbarWidget(),
-      body: ValueListenableBuilder(
-        valueListenable: selectedPageNotifier,
-        builder: (context, selectedPage, child) {
-          return pages.elementAt(selectedPage);
+      body: ValueListenableBuilder<AppTab>(
+        valueListenable: selectedTabNotifier,
+        builder: (context, selectedTab, child) {
+          switch (selectedTab) {
+            case AppTab.calendar:
+              return const CalendarPage();
+            case AppTab.journal:
+              return const JournalPage();
+            case AppTab.myPet:
+              return const MypetPage();
+          }
         },
       ),
       bottomNavigationBar: const _Navbar(),
@@ -89,14 +97,55 @@ class _NotificationsButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return IconButton(
-      onPressed: () {
-        Navigator.push(
-          context,
-          MaterialPageRoute(builder: (context) => NotificationsPage()),
+    return ValueListenableBuilder<List<AppNotification>>(
+      valueListenable: notificationsNotifier,
+      builder: (context, notifications, child) {
+        final unreadCount = notifications.where((n) => !n.isRead).length;
+        return Stack(
+          clipBehavior: Clip.none,
+          children: [
+            IconButton(
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const NotificationsPage()),
+                );
+              },
+              icon: const Icon(Icons.notifications),
+            ),
+
+            if (unreadCount > 0)
+              Positioned(right: 1, top: 0, child: _Badge(count: unreadCount)),
+          ],
         );
       },
-      icon: const Icon(Icons.notifications),
+    );
+  }
+}
+
+class _Badge extends StatelessWidget {
+  final int count;
+  const _Badge({required this.count});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(5),
+      decoration: const BoxDecoration(
+        color: Colors.red,
+        shape: BoxShape.circle,
+      ),
+      constraints: const BoxConstraints(minWidth: 18, minHeight: 18),
+      child: Center(
+        child: Text(
+          count > 10 ? '10+' : count.toString(),
+          style: const TextStyle(
+            color: Colors.white,
+            fontSize: 10,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+      ),
     );
   }
 }
@@ -109,29 +158,37 @@ class PetsDropdown extends StatefulWidget {
 }
 
 class _PetsDropdownState extends State<PetsDropdown> {
-  final List<Pet> pets = [
-    Pet(id: '0', name: 'Sausage', imageUrl: 'assets/images/test_pet.jpg'),
-    Pet(id: '1', name: 'Pausage', imageUrl: 'assets/images/test_pet.jpg'),
-    Pet(id: '2', name: 'Mortage', imageUrl: 'assets/images/test_pet.jpg'),
-  ]; // temporary list
+  // final List<Pet> pets = [
+  //   Pet(id: '0', name: 'Sausage', imageUrl: 'assets/images/test_pet.jpg'),
+  //   Pet(id: '1', name: 'Pausage', imageUrl: 'assets/images/test_pet.jpg'),
+  //   Pet(id: '2', name: 'Mortage', imageUrl: 'assets/images/test_pet.jpg'),
+  // ]; // temporary list
 
   @override
   Widget build(BuildContext context) {
-    return ValueListenableBuilder<Pet>(
-      valueListenable: selectedPetNotificer,
-      builder: (context, currentPet, child) {
-        return PopupMenuButton<Pet>(
-          offset: const Offset(10, 42),
-          onSelected: (Pet selectedPet) {
-            selectedPetNotificer.value = selectedPet;
+    return ValueListenableBuilder<List<Pet>>(
+      valueListenable: petsNotifier,
+      builder: (context, pets, child) {
+        return ValueListenableBuilder<Pet?>(
+          valueListenable: selectedPetNotifier,
+          builder: (context, currentPet, child) {
+            if (currentPet == null) {
+              return const SizedBox();
+            }
+            return PopupMenuButton<Pet>(
+              offset: const Offset(10, 42),
+              onSelected: (Pet selectedPet) {
+                selectedPetNotifier.value = selectedPet;
+              },
+              itemBuilder: (context) {
+                return pets
+                    .where((pet) => pet.id != currentPet.id)
+                    .map((pet) => _PetMenuItem(pet: pet))
+                    .toList();
+              },
+              child: _SelectedPetButton(pet: currentPet),
+            );
           },
-          itemBuilder: (context) {
-            return pets
-                .where((pet) => pet.id != currentPet.id)
-                .map((pet) => _PetMenuItem(pet: pet))
-                .toList();
-          },
-          child: _SelectedPetButton(pet: currentPet),
         );
       },
     );
@@ -198,13 +255,13 @@ class _Navbar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ValueListenableBuilder<int>(
-      valueListenable: selectedPageNotifier,
-      builder: (context, selectedPage, child) {
+    return ValueListenableBuilder<AppTab>(
+      valueListenable: selectedTabNotifier,
+      builder: (context, selectedTab, child) {
         return NavigationBar(
-          selectedIndex: selectedPage,
-          onDestinationSelected: (value) {
-            selectedPageNotifier.value = value;
+          selectedIndex: AppTab.values.indexOf(selectedTab),
+          onDestinationSelected: (index) {
+            selectedTabNotifier.value = AppTab.values[index];
           },
           destinations: const [
             NavigationDestination(
