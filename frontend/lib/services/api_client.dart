@@ -9,13 +9,15 @@ class ApiClient {
   static Uri _u(String path) => Uri.parse("${AppConfig.apiBaseUrl}$path");
 
   static Map<String, String> _headers(String accessToken) => {
-        "Authorization": "Bearer $accessToken",
-        "Content-Type": "application/json",
-      };
+    "Authorization": "Bearer $accessToken",
+    "Content-Type": "application/json",
+  };
 
   /// GET with automatic refresh+retry on 401
-  static Future<http.Response> get(String path,
-      {Map<String, String>? queryParameters}) async {
+  static Future<http.Response> get(
+    String path, {
+    Map<String, String>? queryParameters,
+  }) async {
     final access = await TokenStore.readAccess();
     if (access == null) throw "No access token found.";
 
@@ -31,8 +33,11 @@ class ApiClient {
   }
 
   /// POST with automatic refresh+retry on 401
-  static Future<http.Response> post(String path,
-      {Map<String, String>? queryParameters, Object? jsonBody}) async {
+  static Future<http.Response> post(
+    String path, {
+    Map<String, String>? queryParameters,
+    Object? jsonBody,
+  }) async {
     final access = await TokenStore.readAccess();
     if (access == null) throw "No access token found.";
 
@@ -47,6 +52,33 @@ class ApiClient {
 
     final refreshed = await _refreshAccessOrThrow();
     final res2 = await http.post(
+      uri,
+      headers: _headers(refreshed),
+      body: jsonBody == null ? null : jsonEncode(jsonBody),
+    );
+    return res2;
+  }
+
+  /// PATCH with automatic refresh+retry on 401
+  static Future<http.Response> patch(
+    String path, {
+    Map<String, String>? queryParameters,
+    Object? jsonBody,
+  }) async {
+    final access = await TokenStore.readAccess();
+    if (access == null) throw "No access token found.";
+
+    final uri = _u(path).replace(queryParameters: queryParameters);
+    final res = await http.patch(
+      uri,
+      headers: _headers(access),
+      body: jsonBody == null ? null : jsonEncode(jsonBody),
+    );
+
+    if (res.statusCode != 401) return res;
+
+    final refreshed = await _refreshAccessOrThrow();
+    final res2 = await http.patch(
       uri,
       headers: _headers(refreshed),
       body: jsonBody == null ? null : jsonEncode(jsonBody),

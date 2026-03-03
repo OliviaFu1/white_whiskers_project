@@ -2,7 +2,6 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:frontend/pages/app_shell.dart';
-import 'package:frontend/services/token_store.dart';
 import 'package:frontend/services/pet_store.dart';
 import 'package:frontend/services/calendar_api.dart';
 
@@ -81,9 +80,6 @@ class _JournalPageState extends State<JournalPage> {
     });
 
     try {
-      final access = await TokenStore.readAccess();
-      if (access == null) throw "No access token found.";
-
       final petId = await PetStore.getCurrentPetId();
       if (petId == null) throw "No pet selected.";
 
@@ -98,7 +94,7 @@ class _JournalPageState extends State<JournalPage> {
         "tag": _tag,
       };
 
-      await CalendarApi.createJournalEntry(accessToken: access, body: body);
+      await CalendarApi.createJournalEntry(body: body);
 
       if (!mounted) return;
 

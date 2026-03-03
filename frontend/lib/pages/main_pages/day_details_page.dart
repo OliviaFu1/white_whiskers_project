@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:frontend/services/token_store.dart';
 import 'package:frontend/services/pet_store.dart';
 import 'package:frontend/services/calendar_api.dart';
 
@@ -38,17 +37,14 @@ class _DayDetailsPageState extends State<DayDetailsPage> {
     });
 
     try {
-      final accessToken = await _getAccessToken();
       final petId = await _getCurrentPetId();
 
       final checkins = await CalendarApi.listDailyCheckins(
-        accessToken: accessToken,
         petId: petId,
         date: _yyyyMmDd,
       );
 
       final journals = await CalendarApi.listJournalEntries(
-        accessToken: accessToken,
         petId: petId,
         date: _yyyyMmDd,
       );
@@ -324,12 +320,6 @@ class _DayDetailsPageState extends State<DayDetailsPage> {
   }
 
   // ------- Auth/pet -------
-
-  Future<String> _getAccessToken() async {
-    final access = await TokenStore.readAccess();
-    if (access == null) throw "No access token found.";
-    return access;
-  }
 
   Future<int> _getCurrentPetId() async {
     final petId = await PetStore.getCurrentPetId();

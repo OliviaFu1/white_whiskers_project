@@ -56,14 +56,10 @@ class _DailyCheckinPageState extends State<DailyCheckinPage> {
     });
 
     try {
-      final access = await TokenStore.readAccess();
-      if (access == null) throw "No access token found.";
       final petId = await PetStore.getCurrentPetId();
       if (petId == null) throw "No pet selected.";
 
-      // simplest: pull list and find today's entry
       final checkins = await CalendarApi.listDailyCheckins(
-        accessToken: access,
         petId: petId,
       );
 
@@ -124,7 +120,6 @@ class _DailyCheckinPageState extends State<DailyCheckinPage> {
       if (_checkinId == null) {
         // Create (first time today)
         final res = await CalendarApi.createDailyCheckin(
-          accessToken: access,
           body: body,
         );
         final id = res["id"];
@@ -132,7 +127,6 @@ class _DailyCheckinPageState extends State<DailyCheckinPage> {
       } else {
         // Update (today already exists)
         await CalendarApi.updateDailyCheckin(
-          accessToken: access,
           id: _checkinId!,
           body: body,
         );

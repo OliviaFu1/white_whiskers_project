@@ -1,26 +1,18 @@
 import 'dart:convert';
-import 'package:http/http.dart' as http;
-import '../config.dart';
+import 'api_client.dart';
 
 class CalendarApi {
-  static Uri _u(String path) => Uri.parse("${AppConfig.apiBaseUrl}$path");
-
-  static Map<String, String> _authHeaders(String accessToken) => {
-    "Authorization": "Bearer $accessToken",
-    "Content-Type": "application/json",
-  };
-
   static Future<List<Map<String, dynamic>>> listDailyCheckins({
-    required String accessToken,
     required int petId,
     String? date,
   }) async {
     final qp = <String, String>{"pet_id": petId.toString()};
     if (date != null) qp["date"] = date;
 
-    final uri = _u("/api/calendar/daily-checkins/").replace(queryParameters: qp);
-
-    final res = await http.get(uri, headers: _authHeaders(accessToken));
+    final res = await ApiClient.get(
+      "/api/calendar/daily-checkins/",
+      queryParameters: qp,
+    );
 
     if (res.statusCode < 200 || res.statusCode >= 300) {
       throw _extractError(res.body) ??
@@ -36,7 +28,6 @@ class CalendarApi {
   }
 
   static Future<List<Map<String, dynamic>>> listJournalEntries({
-    required String accessToken,
     required int petId,
     String? date,
     String? tag,
@@ -47,9 +38,10 @@ class CalendarApi {
     if (tag != null) qp["tag"] = tag;
     if (visibility != null) qp["visibility"] = visibility;
 
-    final uri = _u("/api/calendar/journal-entries/").replace(queryParameters: qp);
-
-    final res = await http.get(uri, headers: _authHeaders(accessToken));
+    final res = await ApiClient.get(
+      "/api/calendar/journal-entries/",
+      queryParameters: qp,
+    );
 
     if (res.statusCode < 200 || res.statusCode >= 300) {
       throw _extractError(res.body) ??
@@ -65,13 +57,11 @@ class CalendarApi {
   }
 
   static Future<Map<String, dynamic>> createDailyCheckin({
-    required String accessToken,
     required Map<String, dynamic> body,
   }) async {
-    final res = await http.post(
-      _u("/api/calendar/daily-checkins/"),
-      headers: _authHeaders(accessToken),
-      body: jsonEncode(body),
+    final res = await ApiClient.post(
+      "/api/calendar/daily-checkins/",
+      jsonBody: body,
     );
 
     if (res.statusCode < 200 || res.statusCode >= 300) {
@@ -82,14 +72,12 @@ class CalendarApi {
   }
 
   static Future<Map<String, dynamic>> updateDailyCheckin({
-    required String accessToken,
     required int id,
     required Map<String, dynamic> body,
   }) async {
-    final res = await http.patch(
-      _u("/api/calendar/daily-checkins/$id/"),
-      headers: _authHeaders(accessToken),
-      body: jsonEncode(body),
+    final res = await ApiClient.patch(
+      "/api/calendar/daily-checkins/$id/",
+      jsonBody: body,
     );
 
     if (res.statusCode < 200 || res.statusCode >= 300) {
@@ -100,13 +88,11 @@ class CalendarApi {
   }
 
   static Future<Map<String, dynamic>> createJournalEntry({
-    required String accessToken,
     required Map<String, dynamic> body,
   }) async {
-    final res = await http.post(
-      _u("/api/calendar/journal-entries/"),
-      headers: _authHeaders(accessToken),
-      body: jsonEncode(body),
+    final res = await ApiClient.post(
+      "/api/calendar/journal-entries/",
+      jsonBody: body,
     );
 
     if (res.statusCode < 200 || res.statusCode >= 300) {

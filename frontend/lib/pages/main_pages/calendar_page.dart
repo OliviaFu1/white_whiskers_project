@@ -4,7 +4,6 @@ import 'package:frontend/pages/main_pages/medication_page.dart';
 import 'package:frontend/pages/main_pages/daily_checkin_page.dart';
 import 'package:frontend/pages/main_pages/day_details_page.dart';
 import 'package:frontend/services/calendar_api.dart';
-import 'package:frontend/services/token_store.dart';
 import 'package:frontend/services/pet_store.dart';
 
 enum DayStatus { good, bad, neutral, none }
@@ -197,13 +196,8 @@ class _CalendarPageState extends State<CalendarPage> {
     });
 
     try {
-      final accessToken = await _getAccessToken();
       final petId = await _getCurrentPetId();
-
-      final checkins = await CalendarApi.listDailyCheckins(
-        accessToken: accessToken,
-        petId: petId,
-      );
+      final checkins = await CalendarApi.listDailyCheckins(petId: petId);
 
       final statusMap = <DateTime, DayStatus>{};
       final daysWith = <DateTime>{};
@@ -279,10 +273,12 @@ class _CalendarPageState extends State<CalendarPage> {
 
   DayStatus _combineDayStatus(DayStatus? existing, DayStatus incoming) {
     if (existing == null) return incoming;
-    if (existing == DayStatus.bad || incoming == DayStatus.bad)
-      {return DayStatus.bad;}
-    if (existing == DayStatus.neutral || incoming == DayStatus.neutral)
-      {return DayStatus.neutral;}
+    if (existing == DayStatus.bad || incoming == DayStatus.bad) {
+      return DayStatus.bad;
+    }
+    if (existing == DayStatus.neutral || incoming == DayStatus.neutral) {
+      return DayStatus.neutral;
+    }
     return DayStatus.good;
   }
 
@@ -295,12 +291,6 @@ class _CalendarPageState extends State<CalendarPage> {
       int.parse(parts[1]),
       int.parse(parts[2]),
     );
-  }
-
-  Future<String> _getAccessToken() async {
-    final access = await TokenStore.readAccess();
-    if (access == null) throw "No access token found.";
-    return access;
   }
 
   Future<int> _getCurrentPetId() async {
