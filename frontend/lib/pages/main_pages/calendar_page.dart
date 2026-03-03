@@ -23,12 +23,8 @@ class _CalendarPageState extends State<CalendarPage> {
   static const badColor = Color(0xFFE3A8A8);
 
   DateTime _focusedDay = DateTime.now();
-  DateTime? _selectedDay;
 
-  // backend-driven statuses keyed by dateOnly
   Map<DateTime, DayStatus> _statusByDay = {};
-
-  // dates that have at least one check-in
   final Set<DateTime> _daysWithCheckin = {};
 
   bool _loading = false;
@@ -45,9 +41,18 @@ class _CalendarPageState extends State<CalendarPage> {
     final today = _dateOnly(DateTime.now());
     final hasCheckinToday = _daysWithCheckin.contains(today);
 
-    final (allPct, allN) = _computeGoodPctRange(endDayInclusive: today, daysBack: 0);
-    final (pct28, n28) = _computeGoodPctRange(endDayInclusive: today, daysBack: 28);
-    final (pct7, n7) = _computeGoodPctRange(endDayInclusive: today, daysBack: 7);
+    final (allPct, allN) = _computeGoodPctRange(
+      endDayInclusive: today,
+      daysBack: 0,
+    );
+    final (pct28, n28) = _computeGoodPctRange(
+      endDayInclusive: today,
+      daysBack: 28,
+    );
+    final (pct7, n7) = _computeGoodPctRange(
+      endDayInclusive: today,
+      daysBack: 7,
+    );
 
     return Container(
       color: bg,
@@ -60,26 +65,42 @@ class _CalendarPageState extends State<CalendarPage> {
                 firstDay: DateTime.utc(2020, 1, 1),
                 lastDay: DateTime.utc(2030, 12, 31),
                 focusedDay: _focusedDay,
-                selectedDayPredicate: (day) => isSameDay(_selectedDay, day),
+                headerStyle: const HeaderStyle(formatButtonVisible: false),
+
+                enabledDayPredicate: (day) {
+                  final today = _dateOnly(DateTime.now());
+                  return !_dateOnly(
+                    day,
+                  ).isAfter(today); // allow today + past only
+                },
+
                 onDaySelected: (selectedDay, focusedDay) {
-                  setState(() {
-                    _selectedDay = selectedDay;
-                    _focusedDay = focusedDay;
-                  });
+                  final today = _dateOnly(DateTime.now());
+                  final sel = _dateOnly(selectedDay);
+
+                  // block future clicks
+                  if (sel.isAfter(today)) return;
+
+                  setState(() => _focusedDay = focusedDay);
 
                   Navigator.of(context).push(
                     MaterialPageRoute(
-                      builder: (_) => DayDetailsPage(date: _dateOnly(selectedDay)),
+                      builder: (_) => DayDetailsPage(date: sel),
                     ),
                   );
                 },
+
+                onPageChanged: (focusedDay) =>
+                    setState(() => _focusedDay = focusedDay),
+
                 calendarBuilders: CalendarBuilders(
-                  defaultBuilder: (context, day, focusedDay) => _buildDayCell(day),
-                  todayBuilder: (context, day, focusedDay) => _buildDayCell(day, isToday: true),
-                  selectedBuilder: (context, day, focusedDay) => _buildDayCell(day, isSelected: true),
+                  defaultBuilder: (context, day, focusedDay) =>
+                      _buildDayCell(day),
+                  todayBuilder: (context, day, focusedDay) =>
+                      _buildDayCell(day, isToday: true),
+                  disabledBuilder: (context, day, focusedDay) =>
+                      _buildDayCell(day, isDisabled: true),
                 ),
-                onPageChanged: (focusedDay) => setState(() => _focusedDay = focusedDay),
-                headerStyle: const HeaderStyle(formatButtonVisible: false),
               ),
 
               const SizedBox(height: 12),
@@ -101,7 +122,9 @@ class _CalendarPageState extends State<CalendarPage> {
               _actionRow(
                 Icons.check_circle_outline,
                 "Daily check-in",
-                iconColor: hasCheckinToday ? Colors.green : const Color(0xFF6F6A67),
+                iconColor: hasCheckinToday
+                    ? Colors.green
+                    : const Color(0xFF6F6A67),
                 onTap: () async {
                   final changed = await Navigator.of(context).push<bool>(
                     MaterialPageRoute(builder: (_) => const DailyCheckinPage()),
@@ -132,8 +155,8 @@ class _CalendarPageState extends State<CalendarPage> {
 
   Widget _buildDayCell(
     DateTime day, {
-    bool isSelected = false,
     bool isToday = false,
+    bool isDisabled = false,
   }) {
     final d0 = _dateOnly(day);
     final status = _statusByDay[d0] ?? DayStatus.none;
@@ -145,17 +168,24 @@ class _CalendarPageState extends State<CalendarPage> {
       DayStatus.none => Colors.transparent,
     };
 
-    return Container(
-      margin: const EdgeInsets.all(4),
-      decoration: BoxDecoration(
-        color: bgColor,
-        borderRadius: BorderRadius.circular(6),
-        border: isSelected ? Border.all(color: Colors.black, width: 2) : null,
-      ),
-      alignment: Alignment.center,
-      child: Text(
-        '${day.day}',
-        style: const TextStyle(fontWeight: FontWeight.w600),
+    final textColor = isDisabled
+        ? Colors.black.withValues()
+        : Colors.black;
+
+    return Opacity(
+      opacity: isDisabled ? 0.55 : 1.0,
+      child: Container(
+        margin: const EdgeInsets.all(4),
+        decoration: BoxDecoration(
+          color: bgColor,
+          borderRadius: BorderRadius.circular(6),
+          border: isToday ? Border.all(color: Colors.black, width: 1.5) : null,
+        ),
+        alignment: Alignment.center,
+        child: Text(
+          '${day.day}',
+          style: TextStyle(fontWeight: FontWeight.w600, color: textColor),
+        ),
       ),
     );
   }
@@ -220,8 +250,7 @@ class _CalendarPageState extends State<CalendarPage> {
         total++;
         if (s == DayStatus.good) good++;
       }
-      final pct = total == 0 ? 0.0 : 100.0 * good / total;
-      return (pct, total);
+      return (total == 0 ? 0.0 : 100.0 * good / total, total);
     }
 
     final end = _dateOnly(endDayInclusive);
@@ -234,8 +263,7 @@ class _CalendarPageState extends State<CalendarPage> {
       if (entry.value == DayStatus.good) good++;
     }
 
-    final pct = total == 0 ? 0.0 : 100.0 * good / total;
-    return (pct, total);
+    return (total == 0 ? 0.0 : 100.0 * good / total, total);
   }
 
   DayStatus _toDayStatus(String dayRating) {
@@ -249,11 +277,12 @@ class _CalendarPageState extends State<CalendarPage> {
     }
   }
 
-  // bad > neutral > good
   DayStatus _combineDayStatus(DayStatus? existing, DayStatus incoming) {
     if (existing == null) return incoming;
-    if (existing == DayStatus.bad || incoming == DayStatus.bad) return DayStatus.bad;
-    if (existing == DayStatus.neutral || incoming == DayStatus.neutral) return DayStatus.neutral;
+    if (existing == DayStatus.bad || incoming == DayStatus.bad)
+      {return DayStatus.bad;}
+    if (existing == DayStatus.neutral || incoming == DayStatus.neutral)
+      {return DayStatus.neutral;}
     return DayStatus.good;
   }
 
@@ -261,7 +290,11 @@ class _CalendarPageState extends State<CalendarPage> {
 
   DateTime _parseYyyyMmDd(String s) {
     final parts = s.split("-");
-    return DateTime(int.parse(parts[0]), int.parse(parts[1]), int.parse(parts[2]));
+    return DateTime(
+      int.parse(parts[0]),
+      int.parse(parts[1]),
+      int.parse(parts[2]),
+    );
   }
 
   Future<String> _getAccessToken() async {
@@ -316,21 +349,60 @@ class _PctBlock extends StatelessWidget {
 
   String _fmtPct(double pct) => "${pct.toStringAsFixed(0)}%";
 
-  @override
-  Widget build(BuildContext context) {
+  Widget _lineWithOptionalHelp({
+    required String label,
+    required bool ok,
+    required String okText,
+    required String helpText,
+  }) {
     const style = TextStyle(fontSize: 16, fontWeight: FontWeight.w500);
 
-    final line28 =
-        n28 >= 15 ? "Past 28 days: ${_fmtPct(pct28)} good" : "Past 28 days: — (need 15 entries)";
-    final line7 = n7 >= 4 ? "Past 7 days: ${_fmtPct(pct7)} good" : "Past 7 days: — (need 4 entries)";
+    if (ok) {
+      return Text("$label: $okText", style: style);
+    }
+
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text("$label: —", style: style),
+        const SizedBox(width: 6),
+        Tooltip(
+          message: helpText,
+          waitDuration: const Duration(milliseconds: 200),
+          child: const Icon(Icons.help_outline, size: 16),
+        ),
+      ],
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final lineAll = Text(
+      "All-time: ${_fmtPct(allPct)} good",
+      style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
+    );
+
+    final line28 = _lineWithOptionalHelp(
+      label: "Past 28 days",
+      ok: n28 >= 15,
+      okText: "${_fmtPct(pct28)} good",
+      helpText: "Need at least 15 check-ins in the past 28 days",
+    );
+
+    final line7 = _lineWithOptionalHelp(
+      label: "Past 7 days",
+      ok: n7 >= 4,
+      okText: "${_fmtPct(pct7)} good",
+      helpText: "Need at least 4 check-ins in the past 7 days",
+    );
 
     return Column(
       children: [
-        Text("All-time: ${_fmtPct(allPct)} good", style: style),
+        lineAll,
         const SizedBox(height: 6),
-        Text(line28, style: style),
+        line28,
         const SizedBox(height: 6),
-        Text(line7, style: style),
+        line7,
         if (error != null) ...[
           const SizedBox(height: 6),
           Text(
