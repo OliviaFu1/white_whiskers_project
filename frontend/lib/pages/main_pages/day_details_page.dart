@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:frontend/services/pet_store.dart';
 import 'package:frontend/services/calendar_api.dart';
+import 'package:frontend/pages/main_pages/daily_checkin_page.dart';
 
 class DayDetailsPage extends StatefulWidget {
   final DateTime date;
@@ -11,7 +12,22 @@ class DayDetailsPage extends StatefulWidget {
 }
 
 class _DayDetailsPageState extends State<DayDetailsPage> {
-  late final String _yyyyMmDd;
+  static const muted = Color(0xFF676767);
+  static const bg = Color(0xFFFBF2EB);
+  static const accent = Color(0xFF917869);
+  bool _changed = false;
+
+  late final PageController _pageCtl;
+
+  late final DateTime _anchorDay;
+  late DateTime _currentDay;
+
+  // days back allow scrolling
+  static const int _daysBack = 50;
+  late final int _initialPage = _daysBack;
+
+  // allow forward until today
+  late int _maxPage;
 
   bool _loading = true;
   String? _err;
@@ -19,18 +35,47 @@ class _DayDetailsPageState extends State<DayDetailsPage> {
   List<Map<String, dynamic>> _checkins = [];
   List<Map<String, dynamic>> _journals = [];
 
-  static const muted = Color(0xFF676767);
-  static const bg = Color(0xFFFBF2EB);
-  static const accent = Color(0xFF917869);
+  DateTime get _today => _dateOnly(DateTime.now());
 
   @override
   void initState() {
     super.initState();
-    _yyyyMmDd = widget.date.toIso8601String().split('T').first;
-    _loadDayDetails();
+    _anchorDay = _dateOnly(widget.date);
+
+    // pages: 0.._maxPage, with _initialPage corresponding to anchor day
+    _maxPage = _initialPage + _today.difference(_anchorDay).inDays;
+    if (_maxPage < _initialPage) {
+      _maxPage = _initialPage;
+    }
+
+    _currentDay = _anchorDay;
+    _pageCtl = PageController(initialPage: _initialPage);
+    _loadForDay(_currentDay);
   }
 
-  Future<void> _loadDayDetails() async {
+  @override
+  void dispose() {
+    _pageCtl.dispose();
+    super.dispose();
+  }
+
+  // ---------- date helpers ----------
+  DateTime _dateOnly(DateTime d) => DateTime(d.year, d.month, d.day);
+
+  String _fmt(DateTime d) =>
+      "${d.year.toString().padLeft(4, '0')}-"
+      "${d.month.toString().padLeft(2, '0')}-"
+      "${d.day.toString().padLeft(2, '0')}";
+
+  bool _isFuture(DateTime d) => _dateOnly(d).isAfter(_today);
+
+  DateTime _dayForPage(int pageIndex) =>
+      _anchorDay.add(Duration(days: pageIndex - _initialPage));
+
+  // ---------- data ----------
+  Future<void> _loadForDay(DateTime day) async {
+    final yyyyMmDd = _fmt(day);
+
     setState(() {
       _loading = true;
       _err = null;
@@ -41,12 +86,12 @@ class _DayDetailsPageState extends State<DayDetailsPage> {
 
       final checkins = await CalendarApi.listDailyCheckins(
         petId: petId,
-        date: _yyyyMmDd,
+        date: yyyyMmDd,
       );
 
       final journals = await CalendarApi.listJournalEntries(
         petId: petId,
-        date: _yyyyMmDd,
+        date: yyyyMmDd,
       );
 
       if (!mounted) return;
@@ -58,35 +103,89 @@ class _DayDetailsPageState extends State<DayDetailsPage> {
       if (!mounted) return;
       setState(() => _err = e.toString());
     } finally {
-      setState(() => _loading = false);
+      if (mounted) setState(() => _loading = false);
     }
   }
 
+  Future<void> _openAddCheckin() async {
+    if (_isFuture(_currentDay)) return;
+
+    final changed = await Navigator.of(context).push<bool>(
+      MaterialPageRoute(builder: (_) => DailyCheckinPage(date: _currentDay)),
+    );
+
+    if (changed == true) {
+      _changed = true;
+      await _loadForDay(_currentDay);
+    }
+  }
+
+  // ---------- UI ----------
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: bg,
-      appBar: AppBar(
-        title: Text(_yyyyMmDd),
+    final title = _fmt(_currentDay);
+
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, result) {
+        if (!mounted) return;
+        final nav = Navigator.of(context);
+        if (nav.canPop()) nav.pop(_changed);
+      },
+      child: Scaffold(
         backgroundColor: bg,
-        foregroundColor: muted,
-        elevation: 0,
-      ),
-      body: _loading
-          ? const Center(child: CircularProgressIndicator())
-          : _err != null
-          ? Center(
-              child: Text(
-                _err!,
-                style: const TextStyle(color: Colors.redAccent),
-              ),
-            )
-          : RefreshIndicator(
-              onRefresh: _loadDayDetails,
+        appBar: AppBar(
+          title: Text(title),
+          backgroundColor: bg,
+          foregroundColor: muted,
+          elevation: 0,
+        ),
+
+        // PageView handles swipe (bounded: can go back, but cannot go into future)
+        body: PageView.builder(
+          controller: _pageCtl,
+          itemCount: _maxPage + 1, // limits forward to today
+          onPageChanged: (i) async {
+            final d = _dayForPage(i);
+            setState(() => _currentDay = d);
+            await _loadForDay(d);
+          },
+          itemBuilder: (context, i) {
+            final d = _dayForPage(i);
+
+            // Render only the currently selected page
+            if (d != _currentDay) return const SizedBox.shrink();
+
+            if (_loading) {
+              return const Center(child: CircularProgressIndicator());
+            }
+
+            if (_err != null) {
+              return Center(
+                child: Text(
+                  _err!,
+                  style: const TextStyle(color: Colors.redAccent),
+                ),
+              );
+            }
+
+            return RefreshIndicator(
+              onRefresh: () => _loadForDay(_currentDay),
               child: ListView(
                 padding: const EdgeInsets.all(16),
                 children: [
-                  _sectionTitle("Daily check-in"),
+                  Row(
+                    children: [
+                      _sectionTitle("Daily check-in"),
+                      const Spacer(),
+                      IconButton(
+                        icon: const Icon(Icons.add),
+                        color: muted,
+                        tooltip: "Add check-in",
+                        onPressed: _openAddCheckin,
+                      ),
+                    ],
+                  ),
                   const SizedBox(height: 8),
                   _buildCheckinCard(),
 
@@ -99,7 +198,10 @@ class _DayDetailsPageState extends State<DayDetailsPage> {
                     _emptyCard("No journal entries for this day."),
                 ],
               ),
-            ),
+            );
+          },
+        ),
+      ),
     );
   }
 
@@ -141,9 +243,9 @@ class _DayDetailsPageState extends State<DayDetailsPage> {
   // ------- Daily checkin rendering -------
 
   Widget _buildCheckinCard() {
-    if (_checkins.isEmpty) return _emptyCard("No check-in for this day.");
-
-    // If there are multiple (e.g., multiple family members), show them all stacked.
+    if (_checkins.isEmpty) {
+      return _emptyCard("No check-in for this day.");
+    }
     return Column(children: _checkins.map((c) => _checkinItem(c)).toList());
   }
 
@@ -191,7 +293,6 @@ class _DayDetailsPageState extends State<DayDetailsPage> {
         ? "Bad"
         : "Neutral";
 
-    // keep it simple: no custom colors, consistent style
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
@@ -207,14 +308,8 @@ class _DayDetailsPageState extends State<DayDetailsPage> {
   }
 
   String _displayAuthor(Map<String, dynamic> obj) {
-    // handle common backend shapes
-    final a = obj["author"] ?? obj["author_user"] ?? obj["author_user_id"];
-    if (a is Map) {
-      final name = (a["name"] ?? a["email"] ?? "").toString();
-      return name;
-    }
-    if (a != null) return "User $a";
-    return "";
+    final name = (obj["author_name"] ?? "").toString().trim();
+    return name;
   }
 
   // ------- Journal rendering -------
@@ -236,7 +331,6 @@ class _DayDetailsPageState extends State<DayDetailsPage> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Header row: tag + visibility + date
               Wrap(
                 spacing: 8,
                 runSpacing: 8,
@@ -248,7 +342,6 @@ class _DayDetailsPageState extends State<DayDetailsPage> {
                     Text(date, style: const TextStyle(color: muted)),
                 ],
               ),
-
               if (author.isNotEmpty) ...[
                 const SizedBox(height: 6),
                 Text(
@@ -259,7 +352,6 @@ class _DayDetailsPageState extends State<DayDetailsPage> {
                   ),
                 ),
               ],
-
               if (title.isNotEmpty) ...[
                 const SizedBox(height: 10),
                 Text(
@@ -271,7 +363,6 @@ class _DayDetailsPageState extends State<DayDetailsPage> {
                   ),
                 ),
               ],
-
               if (text.isNotEmpty) ...[
                 const SizedBox(height: 8),
                 Text(text, style: const TextStyle(color: muted)),
@@ -299,27 +390,16 @@ class _DayDetailsPageState extends State<DayDetailsPage> {
 
   String _displayEntryDate(dynamic rawDate) {
     if (rawDate == null) return "";
-
     final s = rawDate.toString().trim();
     if (s.isEmpty) return "";
-
-    // If backend already sends "YYYY-MM-DD", just return it
-    if (RegExp(r'^\d{4}-\d{2}-\d{2}$').hasMatch(s)) {
-      return s;
-    }
-
-    // Fallback: try parsing and formatting
+    if (RegExp(r'^\d{4}-\d{2}-\d{2}$').hasMatch(s)) return s;
     try {
       final d = DateTime.parse(s);
-      return "${d.year.toString().padLeft(4, '0')}-"
-          "${d.month.toString().padLeft(2, '0')}-"
-          "${d.day.toString().padLeft(2, '0')}";
+      return _fmt(_dateOnly(d));
     } catch (_) {
       return s;
     }
   }
-
-  // ------- Auth/pet -------
 
   Future<int> _getCurrentPetId() async {
     final petId = await PetStore.getCurrentPetId();

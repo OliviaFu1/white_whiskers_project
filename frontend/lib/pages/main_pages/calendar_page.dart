@@ -74,19 +74,21 @@ class _CalendarPageState extends State<CalendarPage> {
                 },
 
                 onDaySelected: (selectedDay, focusedDay) {
-                  final today = _dateOnly(DateTime.now());
-                  final sel = _dateOnly(selectedDay);
-
-                  // block future clicks
-                  if (sel.isAfter(today)) return;
-
                   setState(() => _focusedDay = focusedDay);
 
-                  Navigator.of(context).push(
-                    MaterialPageRoute(
-                      builder: (_) => DayDetailsPage(date: sel),
-                    ),
-                  );
+                  final selected = _dateOnly(selectedDay);
+
+                  WidgetsBinding.instance.addPostFrameCallback((_) async {
+                    final changed = await Navigator.of(context).push<bool>(
+                      MaterialPageRoute(
+                        builder: (_) => DayDetailsPage(date: selected),
+                      ),
+                    );
+
+                    if (changed == true) {
+                      await _loadAllCheckins();
+                    }
+                  });
                 },
 
                 onPageChanged: (focusedDay) =>
@@ -126,7 +128,9 @@ class _CalendarPageState extends State<CalendarPage> {
                     : const Color(0xFF6F6A67),
                 onTap: () async {
                   final changed = await Navigator.of(context).push<bool>(
-                    MaterialPageRoute(builder: (_) => const DailyCheckinPage()),
+                    MaterialPageRoute(
+                      builder: (_) => DailyCheckinPage(date: DateTime.now()),
+                    ),
                   );
                   if (changed == true) {
                     await _loadAllCheckins();
@@ -167,9 +171,7 @@ class _CalendarPageState extends State<CalendarPage> {
       DayStatus.none => Colors.transparent,
     };
 
-    final textColor = isDisabled
-        ? Colors.black.withValues()
-        : Colors.black;
+    final textColor = isDisabled ? Colors.black.withValues() : Colors.black;
 
     return Opacity(
       opacity: isDisabled ? 0.55 : 1.0,

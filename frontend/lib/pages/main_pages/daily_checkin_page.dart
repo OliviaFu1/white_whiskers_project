@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
-import 'package:frontend/services/token_store.dart';
 import 'package:frontend/services/pet_store.dart';
 import 'package:frontend/services/calendar_api.dart';
 
 class DailyCheckinPage extends StatefulWidget {
-  const DailyCheckinPage({super.key});
+  final DateTime date;
+  const DailyCheckinPage({super.key, required this.date});
 
   @override
   State<DailyCheckinPage> createState() => _DailyCheckinPageState();
@@ -18,17 +18,21 @@ class _DailyCheckinPageState extends State<DailyCheckinPage> {
 
   final _notesCtl = TextEditingController();
 
-  String _rating = "neutral";
-  String _initialRating = "neutral";
+  String? _rating;
+  String? _initialRating;
   String _initialNotes = "";
+  bool get _hasRating =>
+      _rating == "good" || _rating == "neutral" || _rating == "bad";
 
-  int? _checkinId; // today's existing row id if any
+  int? _checkinId;
 
   bool _loading = true;
   bool _saving = false;
   String? _error;
 
-  DateTime get _today => DateTime.now();
+  DateTime get _day =>
+      DateTime(widget.date.year, widget.date.month, widget.date.day);
+
   String _yyyyMmDd(DateTime d) =>
       "${d.year.toString().padLeft(4, '0')}-"
       "${d.month.toString().padLeft(2, '0')}-"
@@ -40,7 +44,7 @@ class _DailyCheckinPageState extends State<DailyCheckinPage> {
   @override
   void initState() {
     super.initState();
-    _loadToday();
+    _loadDay();
   }
 
   @override
@@ -49,7 +53,7 @@ class _DailyCheckinPageState extends State<DailyCheckinPage> {
     super.dispose();
   }
 
-  Future<void> _loadToday() async {
+  Future<void> _loadDay() async {
     setState(() {
       _loading = true;
       _error = null;
@@ -59,31 +63,31 @@ class _DailyCheckinPageState extends State<DailyCheckinPage> {
       final petId = await PetStore.getCurrentPetId();
       if (petId == null) throw "No pet selected.";
 
+      final dayStr = _yyyyMmDd(_day);
+
       final checkins = await CalendarApi.listDailyCheckins(
         petId: petId,
+        date: dayStr,
       );
 
-      final todayStr = _yyyyMmDd(_today);
-      Map<String, dynamic>? today;
-      for (final c in checkins) {
-        if ((c["checkin_date"] ?? "") == todayStr) {
-          today = Map<String, dynamic>.from(c);
-          break;
-        }
-      }
+      final existing =
+          checkins.isNotEmpty ? Map<String, dynamic>.from(checkins.first) : null;
 
-      final rating = (today?["day_rating"] ?? "neutral") as String;
-      final notes = (today?["notes"] ?? "") as String;
-      final id = today?["id"]; // DRF pk
+      final ratingRaw = existing?["day_rating"];
+      final rating = ratingRaw?.toString();
+      final notes = (existing?["notes"] ?? "").toString();
+      final id = existing?["id"];
 
-      final normalized = (rating == "good" || rating == "bad" || rating == "neutral")
-          ? rating
-          : "neutral";
+      final normalized =
+          (rating == "good" || rating == "bad" || rating == "neutral")
+              ? rating
+              : null;
 
       setState(() {
-        _checkinId = (id is int) ? id : (id is String ? int.tryParse(id) : null);
+        _checkinId =
+            (id is int) ? id : (id is String ? int.tryParse(id) : null);
 
-        _rating = normalized;
+        _rating = normalized; // null if no record -> no default selection
         _notesCtl.text = notes;
 
         _initialRating = normalized;
@@ -97,6 +101,10 @@ class _DailyCheckinPageState extends State<DailyCheckinPage> {
   }
 
   Future<void> _save() async {
+    if (!_hasRating) {
+      setState(() => _error = "Please select Good / Neutral / Bad.");
+      return;
+    }
     if (!_dirty) return;
 
     setState(() {
@@ -105,31 +113,23 @@ class _DailyCheckinPageState extends State<DailyCheckinPage> {
     });
 
     try {
-      final access = await TokenStore.readAccess();
-      if (access == null) throw "No access token found.";
       final petId = await PetStore.getCurrentPetId();
       if (petId == null) throw "No pet selected.";
 
       final body = <String, dynamic>{
         "pet_id": petId,
-        "checkin_date": _yyyyMmDd(_today), // today only
-        "day_rating": _rating,
+        "checkin_date": _yyyyMmDd(_day),
+        "day_rating": _rating!, // non-null enforced by _hasRating
         "notes": _notesCtl.text.trim(),
       };
 
       if (_checkinId == null) {
-        // Create (first time today)
-        final res = await CalendarApi.createDailyCheckin(
-          body: body,
-        );
+        final res = await CalendarApi.createDailyCheckin(body: body);
         final id = res["id"];
-        _checkinId = (id is int) ? id : (id is String ? int.tryParse(id) : null);
+        _checkinId =
+            (id is int) ? id : (id is String ? int.tryParse(id) : null);
       } else {
-        // Update (today already exists)
-        await CalendarApi.updateDailyCheckin(
-          id: _checkinId!,
-          body: body,
-        );
+        await CalendarApi.updateDailyCheckin(id: _checkinId!, body: body);
       }
 
       if (!mounted) return;
@@ -143,7 +143,7 @@ class _DailyCheckinPageState extends State<DailyCheckinPage> {
         const SnackBar(content: Text("Daily check-in saved.")),
       );
 
-      Navigator.of(context).pop(true); // let CalendarPage refresh
+      Navigator.of(context).pop(true);
     } catch (e) {
       setState(() => _error = e.toString());
     } finally {
@@ -153,7 +153,7 @@ class _DailyCheckinPageState extends State<DailyCheckinPage> {
 
   @override
   Widget build(BuildContext context) {
-    final dateStr = _yyyyMmDd(_today);
+    final dateStr = _yyyyMmDd(_day);
 
     return Scaffold(
       backgroundColor: bg,
@@ -171,19 +171,20 @@ class _DailyCheckinPageState extends State<DailyCheckinPage> {
               : Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    const Text(
-                      "How was today?",
-                      style: TextStyle(
+                    Text(
+                      "How was ${dateStr == _yyyyMmDd(DateTime.now()) ? "today" : "this day"}?",
+                      style: const TextStyle(
                         fontSize: 26,
                         fontWeight: FontWeight.w800,
                         color: titleColor,
                       ),
                     ),
                     const SizedBox(height: 12),
-
-                    // Date display (read-only)
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 14,
+                        vertical: 12,
+                      ),
                       decoration: BoxDecoration(
                         color: Colors.white,
                         borderRadius: BorderRadius.circular(12),
@@ -192,26 +193,36 @@ class _DailyCheckinPageState extends State<DailyCheckinPage> {
                             blurRadius: 10,
                             offset: Offset(0, 5),
                             color: Color(0x22000000),
-                          )
+                          ),
                         ],
                       ),
                       child: Row(
                         children: [
-                          const Icon(Icons.calendar_today_outlined, color: muted, size: 18),
+                          const Icon(
+                            Icons.calendar_today_outlined,
+                            color: muted,
+                            size: 18,
+                          ),
                           const SizedBox(width: 10),
                           Text(
                             dateStr,
-                            style: const TextStyle(fontSize: 16, color: muted, fontWeight: FontWeight.w600),
+                            style: const TextStyle(
+                              fontSize: 16,
+                              color: muted,
+                              fontWeight: FontWeight.w600,
+                            ),
                           ),
                           const Spacer(),
-                          if (_checkinId != null) const Icon(Icons.check_circle, color: Colors.green, size: 18),
+                          if (_checkinId != null)
+                            const Icon(
+                              Icons.check_circle,
+                              color: Colors.green,
+                              size: 18,
+                            ),
                         ],
                       ),
                     ),
-
                     const SizedBox(height: 14),
-
-                    // Rating pills
                     Container(
                       padding: const EdgeInsets.all(12),
                       decoration: BoxDecoration(
@@ -222,7 +233,7 @@ class _DailyCheckinPageState extends State<DailyCheckinPage> {
                             blurRadius: 10,
                             offset: Offset(0, 5),
                             color: Color(0x22000000),
-                          )
+                          ),
                         ],
                       ),
                       child: Row(
@@ -235,10 +246,7 @@ class _DailyCheckinPageState extends State<DailyCheckinPage> {
                         ],
                       ),
                     ),
-
                     const SizedBox(height: 14),
-
-                    // Notes
                     Expanded(
                       child: Container(
                         padding: const EdgeInsets.all(12),
@@ -250,7 +258,7 @@ class _DailyCheckinPageState extends State<DailyCheckinPage> {
                               blurRadius: 10,
                               offset: Offset(0, 5),
                               color: Color(0x22000000),
-                            )
+                            ),
                           ],
                         ),
                         child: TextField(
@@ -259,36 +267,45 @@ class _DailyCheckinPageState extends State<DailyCheckinPage> {
                           maxLines: null,
                           expands: true,
                           decoration: const InputDecoration(
-                            hintText: "Anything to remember today?",
+                            hintText: "Anything to remember?",
                             border: InputBorder.none,
                           ),
                         ),
                       ),
                     ),
-
                     if (_error != null) ...[
                       const SizedBox(height: 10),
-                      Text(_error!, style: const TextStyle(color: Colors.redAccent)),
+                      Text(
+                        _error!,
+                        style: const TextStyle(color: Colors.redAccent),
+                      ),
                     ],
-
                     const SizedBox(height: 12),
-
                     ElevatedButton(
-                      onPressed: (_saving || !_dirty) ? null : _save,
+                      onPressed: (_saving || !_dirty || !_hasRating) ? null : _save,
                       style: ElevatedButton.styleFrom(
                         backgroundColor: accent,
                         padding: const EdgeInsets.symmetric(vertical: 14),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
                       ),
                       child: _saving
                           ? const SizedBox(
                               height: 18,
                               width: 18,
-                              child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: Colors.white,
+                              ),
                             )
                           : Text(
                               _dirty ? "Save changes" : "Saved",
-                              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: Colors.white),
+                              style: const TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w700,
+                                color: Colors.white,
+                              ),
                             ),
                     ),
                   ],
@@ -309,10 +326,14 @@ class _DailyCheckinPageState extends State<DailyCheckinPage> {
           decoration: BoxDecoration(
             color: selected ? const Color(0xFFEFE7E1) : const Color(0xFFF7F5F3),
             borderRadius: BorderRadius.circular(10),
-            border: selected ? Border.all(color: Colors.black, width: 1.5) : null,
+            border:
+                selected ? Border.all(color: Colors.black, width: 1.5) : null,
           ),
           alignment: Alignment.center,
-          child: Text(label, style: const TextStyle(color: muted, fontWeight: FontWeight.w700)),
+          child: Text(
+            label,
+            style: const TextStyle(color: muted, fontWeight: FontWeight.w700),
+          ),
         ),
       ),
     );
