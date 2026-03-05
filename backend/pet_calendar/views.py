@@ -19,7 +19,7 @@ class DailyCheckinViewSet(viewsets.ModelViewSet):
         if pet_id:
             qs = qs.filter(pet_id=pet_id)
 
-        # Day filter: ?date=YYYY-MM-DD
+        # Day filter
         day = parse_date(self.request.query_params.get("date", "") or "")
         if day:
             qs = qs.filter(checkin_date=day)
@@ -42,7 +42,7 @@ class JournalEntryViewSet(viewsets.ModelViewSet):
         if pet_id:
             qs = qs.filter(pet_id=pet_id)
 
-        # Day filter: match a specific calendar day
+        # Day filter
         day = parse_date(self.request.query_params.get("date", "") or "")
         if day:
             qs = qs.filter(entry_date=day)

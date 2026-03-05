@@ -87,7 +87,7 @@ class _DailyCheckinPageState extends State<DailyCheckinPage> {
         _checkinId =
             (id is int) ? id : (id is String ? int.tryParse(id) : null);
 
-        _rating = normalized; // null if no record -> no default selection
+        _rating = normalized;
         _notesCtl.text = notes;
 
         _initialRating = normalized;
@@ -119,7 +119,7 @@ class _DailyCheckinPageState extends State<DailyCheckinPage> {
       final body = <String, dynamic>{
         "pet_id": petId,
         "checkin_date": _yyyyMmDd(_day),
-        "day_rating": _rating!, // non-null enforced by _hasRating
+        "day_rating": _rating!,
         "notes": _notesCtl.text.trim(),
       };
 

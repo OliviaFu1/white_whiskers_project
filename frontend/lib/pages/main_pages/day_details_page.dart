@@ -22,11 +22,9 @@ class _DayDetailsPageState extends State<DayDetailsPage> {
   late final DateTime _anchorDay;
   late DateTime _currentDay;
 
-  // days back allow scrolling
+  // days back allow scrolling ~ today
   static const int _daysBack = 50;
   late final int _initialPage = _daysBack;
-
-  // allow forward until today
   late int _maxPage;
 
   bool _loading = true;
@@ -42,7 +40,6 @@ class _DayDetailsPageState extends State<DayDetailsPage> {
     super.initState();
     _anchorDay = _dateOnly(widget.date);
 
-    // pages: 0.._maxPage, with _initialPage corresponding to anchor day
     _maxPage = _initialPage + _today.difference(_anchorDay).inDays;
     if (_maxPage < _initialPage) {
       _maxPage = _initialPage;
@@ -141,10 +138,9 @@ class _DayDetailsPageState extends State<DayDetailsPage> {
           elevation: 0,
         ),
 
-        // PageView handles swipe (bounded: can go back, but cannot go into future)
         body: PageView.builder(
           controller: _pageCtl,
-          itemCount: _maxPage + 1, // limits forward to today
+          itemCount: _maxPage + 1,
           onPageChanged: (i) async {
             final d = _dayForPage(i);
             setState(() => _currentDay = d);

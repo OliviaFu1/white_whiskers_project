@@ -17,23 +17,22 @@ class _JournalPageState extends State<JournalPage> {
   static const accent = Color(0xFF917869);
   static const muted = Color(0xFF676767);
 
-  // Date-only model: journal entry is tied to a day (no time)
   late DateTime _selectedDay;
 
   final _titleCtl = TextEditingController();
   final _textCtl = TextEditingController();
 
-  String _visibility = "shared"; // shared|private
-  String _tag = "food"; // food|sleep|med|symptoms
+  String _visibility = "shared";
+  String _tag = "food";
 
   bool _submitting = false;
   String? _error;
 
-  // Placeholder upload (local only for now)
+  // TODO: Placeholder upload
   File? _pickedImage;
 
-  // Day scroller settings
-  static const int _dayWindow = 30; // allow up to 30 days back
+  // Day scroller settings, allow up to x days back
+  static const int _dayWindow = 30;
   late final FixedExtentScrollController _dayController;
 
   @override
@@ -83,7 +82,6 @@ class _JournalPageState extends State<JournalPage> {
       final petId = await PetStore.getCurrentPetId();
       if (petId == null) throw "No pet selected.";
 
-      // DateField backend: send YYYY-MM-DD (no timezone, no time)
       final body = <String, dynamic>{
         "pet_id": petId,
         "entry_date": _yyyyMmDd(_dateOnly(_selectedDay)),
@@ -98,7 +96,6 @@ class _JournalPageState extends State<JournalPage> {
 
       if (!mounted) return;
 
-      // Prefer popping if we came from AppShell; otherwise replace route
       final popped = await Navigator.of(context).maybePop(true);
       if (!popped && mounted) {
         Navigator.of(context).pushReplacement(
@@ -163,7 +160,6 @@ class _JournalPageState extends State<JournalPage> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              // Day scroller (no date picker)
               _card(
                 child: Row(
                   children: [
@@ -217,21 +213,21 @@ class _JournalPageState extends State<JournalPage> {
 
               const SizedBox(height: 12),
 
-              // Title (optional, compact)
+              // Title
               _card(
                 child: TextField(
                   controller: _titleCtl,
                   textInputAction: TextInputAction.next,
                   decoration: const InputDecoration(
                     border: InputBorder.none,
-                    hintText: "Title (optional)",
+                    hintText: "Title",
                   ),
                 ),
               ),
 
               const SizedBox(height: 12),
 
-              // Tag + text in one card
+              // Tag + text
               _card(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -265,7 +261,7 @@ class _JournalPageState extends State<JournalPage> {
 
               const SizedBox(height: 12),
 
-              // Image placeholder + visibility
+              // Image upload + visibility
               Row(
                 children: [
                   Expanded(
