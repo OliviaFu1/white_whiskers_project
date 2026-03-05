@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
-import '../../services/auth_api.dart';
+import '../../services/pets_api.dart';
+import '../../services/pet_store.dart';
 import '../../services/token_store.dart';
 
 class MypetPage extends StatefulWidget {
@@ -31,7 +32,12 @@ class _MypetPageState extends State<MypetPage> {
       final access = await TokenStore.readAccess();
       if (access == null) throw "No access token found.";
 
-      final petList = await AuthApi.listPets(accessToken: access);
+      final petList = await PetsApi.listPets();
+
+      if (petList.isNotEmpty) {
+        final firstPetId = petList.first["id"] as int;
+        await PetStore.setCurrentPetId(firstPetId);
+      }
 
       setState(() {
         pets = petList;

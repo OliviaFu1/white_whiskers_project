@@ -42,6 +42,7 @@ INSTALLED_APPS = [
     # add new apps here
     "accounts",
     "pets",
+    "pet_calendar"
 ]
 
 AUTH_USER_MODEL = "accounts.User"
