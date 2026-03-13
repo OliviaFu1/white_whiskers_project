@@ -13,7 +13,9 @@ class TokenStore {
     await _storage.write(key: _kAccess, value: access);
     await _storage.write(key: _kRefresh, value: refresh);
   }
-
+  static Future<void> saveAccessToken(String access) async {
+    await _storage.write(key: _kAccess, value: access);
+  }
   static Future<String?> readAccess() => _storage.read(key: _kAccess);
   static Future<String?> readRefresh() => _storage.read(key: _kRefresh);
 

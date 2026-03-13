@@ -1,4 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:frontend/pages/repositories/notification_repository.dart';
+import 'package:frontend/services/auth_http.dart';
+import 'package:frontend/state/auth_state.dart';
+import 'package:frontend/state/notifiers.dart';
 import '../../services/auth_api.dart';
 import '../../services/token_store.dart';
 
@@ -48,8 +52,16 @@ class _LoginPageState extends State<LoginPage> {
 
       await TokenStore.save(access: access, refresh: refresh);
 
+      // final tokenStore = TokenStore();
+      final authApi = AuthApi();
+      final authHttp = AuthHttp(authApi);
+
+      notificationRepository = ApiNotificationRepository(authHttp);
+
       if (!mounted) return;
-      Navigator.pushReplacementNamed(context, '/post-login');
+      //bug with pushing getting rid of the authstate
+      // Navigator.pushReplacementNamed(context, '/post-login');
+      AuthState.instance.login();
     } catch (e) {
       setState(() => serverErrorText = e.toString());
     } finally {
@@ -142,10 +154,7 @@ class _LoginPageState extends State<LoginPage> {
               const Text(
                 'Forgot password',
                 textAlign: TextAlign.center,
-                style: TextStyle(
-                  fontSize: 12,
-                  color: Color(0xFF676767),
-                ),
+                style: TextStyle(fontSize: 12, color: Color(0xFF676767)),
               ),
 
               const Spacer(),

@@ -10,6 +10,7 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/6.0/ref/settings/
 """
 
+from datetime import timedelta
 import os
 from pathlib import Path
 from dotenv import load_dotenv
@@ -42,6 +43,7 @@ INSTALLED_APPS = [
     # add new apps here
     "accounts",
     "pets",
+    "notifications",
     "pet_calendar"
 ]
 
@@ -136,3 +138,15 @@ USE_TZ = True
 
 STATIC_URL = "static/"
 STATIC_ROOT = BASE_DIR / "staticfiles"
+
+# Access token lifetime
+
+SIMPLE_JWT = {
+    "ACCESS_TOKEN_LIFETIME": timedelta(minutes=15),  
+    "REFRESH_TOKEN_LIFETIME": timedelta(days=30),   # as long as they open the app, stay logged in
+
+    "ROTATE_REFRESH_TOKENS": True,
+    "BLACKLIST_AFTER_ROTATION": True,
+
+    "AUTH_HEADER_TYPES": ("Bearer",),
+}

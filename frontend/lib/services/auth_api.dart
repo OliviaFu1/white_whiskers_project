@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:frontend/services/token_store.dart';
 import 'package:http/http.dart' as http;
 import '../config.dart';
 
@@ -84,6 +85,32 @@ class AuthApi {
     return jsonDecode(res.body) as Map<String, dynamic>;
   }
 
+  Future<String?> refreshAccessToken() async {
+      final refreshToken = await TokenStore.readRefresh();
+
+      if (refreshToken == null) return null;
+
+      final response = await http.post(
+        _u("/api/auth/token/refresh/"),
+        headers: {"Content-Type": "application/json"},
+        body: jsonEncode({"refresh": refreshToken}),
+      );
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        final newAccess = data["access"];
+
+        await TokenStore.saveAccessToken(newAccess);
+        return newAccess;
+      }
+
+      return null; // refresh failed
+    }
+
+  static Future<Map<String, dynamic>> createPet({
+    required String accessToken,
+    required Map<String, dynamic> body,
+  }) async {
   static Future<String> refreshAccess({required String refreshToken}) async {
     final res = await http.post(
       _u("/api/accounts/token/refresh/"),
