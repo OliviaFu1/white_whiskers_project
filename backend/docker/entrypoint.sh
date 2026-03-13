@@ -2,7 +2,7 @@
 set -e
 
 echo "Waiting for postgres..."
-until nc -z "$POSTGRES_HOST" "$POSTGRES_PORT"; do
+until nc -z $DB_HOST $DB_PORT; do
   sleep 1
 done
 echo "Postgres is up."

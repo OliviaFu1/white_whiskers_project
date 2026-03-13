@@ -21,7 +21,9 @@ Future<void> loadPets() async {
 }
 
 Future<void> loadNotifications() async {
-  final notifications = await notificationRepository.fetchNotifications();
+  if (notificationRepository == null) return;
+
+  final notifications = await notificationRepository!.fetchNotifications();
 
   notificationsNotifier.value = notifications;
 }
@@ -31,8 +33,7 @@ enum AppTab { calendar, journal, myPet }
 final selectedTabNotifier = ValueNotifier<AppTab>(AppTab.calendar);
 // final unreadNotificationsNotifier = ValueNotifier<int>(0);
 final notificationsNotifier = ValueNotifier<List<AppNotification>>([]);
-final NotificationRepository notificationRepository =
-    FakeNotificationRepository();
+NotificationRepository? notificationRepository;
 
 final petsNotifier = ValueNotifier<List<Pet>>([]);
 final ValueNotifier<Pet?> selectedPetNotifier = ValueNotifier<Pet?>(null);

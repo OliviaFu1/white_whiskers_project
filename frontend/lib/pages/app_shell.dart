@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:frontend/services/notifications_service.dart';
+import 'package:frontend/state/auth_state.dart';
 import 'package:frontend/state/notifiers.dart';
 import 'package:frontend/models/app_notification.dart';
 import 'package:frontend/models/pet.dart';
@@ -10,8 +12,35 @@ import 'package:frontend/pages/profile_page.dart';
 
 // List<Widget> pages = [CalendarPage(), JournalPage(), MypetPage()];
 
-class AppShell extends StatelessWidget {
+class AppShell extends StatefulWidget {
   const AppShell({super.key});
+
+  @override
+  State<AppShell> createState() => _AppShellState();
+}
+
+class _AppShellState extends State<AppShell> {
+  final NotificationRefresher _refresher = NotificationRefresher();
+
+  @override
+  void initState() {
+    super.initState();
+    _refresher.start();
+    AuthState.instance.addListener(_authListener);
+  }
+
+  void _authListener() {
+    if (!AuthState.instance.value) {
+      _refresher.stop();
+    }
+  }
+
+  @override
+  void dispose() {
+    _refresher.stop();
+    AuthState.instance.removeListener(_authListener);
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {

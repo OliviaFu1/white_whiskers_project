@@ -55,11 +55,12 @@ class _NotificationsPageState extends State<NotificationsPage> {
     Navigator.pop(context);
   }
 
-  void markAsRead(AppNotification notification) {
+Future<void> markAsRead(AppNotification notification) async {
+    await notificationRepository!.markRead(notification.id);
+
     final list = notificationsNotifier.value;
 
     notification.isRead = true;
-
     notificationsNotifier.value = List.from(list);
   }
 }
