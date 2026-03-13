@@ -1,22 +1,32 @@
 import 'package:flutter/material.dart';
-import 'package:frontend/state/notifiers.dart';
+import 'package:frontend/pages/auth/auth_gate.dart';
+import 'package:frontend/services/token_store.dart';
+import 'package:frontend/state/auth_state.dart';
 
 class ProfilePage extends StatelessWidget {
   const ProfilePage({super.key});
 
+  Future<void> _logout(BuildContext context) async {
+    await TokenStore.clear();
+    AuthState.instance.logout();
+
+    if (!context.mounted) return;
+
+    Navigator.of(context).pushAndRemoveUntil(
+      MaterialPageRoute(builder: (_) => const AuthGate()),
+      (route) => false,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(),
+      appBar: AppBar(title: Text('profile page')),
       body: Column(
         children: [
-          Text('profile page'),
           ElevatedButton(
-            onPressed: () async {
-              await notificationRepository!.generateTestNotification();
-              await loadNotifications();
-            },
-            child: Text("Generate Test Notification"),
+            onPressed: () => _logout(context),
+            child: const Text("Logout"),
           ),
         ],
       ),

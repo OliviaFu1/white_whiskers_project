@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:frontend/pages/app_shell.dart';
+import 'package:frontend/services/notifications_service.dart';
+import 'package:frontend/state/auth_state.dart';
 import '../../services/auth_api.dart';
 import '../../services/token_store.dart';
 import '../onboarding/onboarding_flow.dart';
@@ -16,11 +18,27 @@ class _PostLoginGateState extends State<PostLoginGate> {
   bool isLoading = true;
   String? errorText;
   Map<String, dynamic>? me;
+  final NotificationRefresher refresher = NotificationRefresher();
 
   @override
   void initState() {
     super.initState();
+    refresher.start();
+    AuthState.instance.addListener(_authListener);
     _loadMe();
+  }
+
+  void _authListener() {
+    if (!AuthState.instance.value) {
+      refresher.stop();
+    }
+  }
+
+  @override
+  void dispose() {
+    refresher.stop();
+    AuthState.instance.removeListener(_authListener);
+    super.dispose();
   }
 
   Future<void> _loadMe() async {
