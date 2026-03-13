@@ -4,6 +4,7 @@ import 'package:frontend/pages/app_shell.dart';
 import 'package:frontend/pages/assessment/assessment_page.dart';
 import 'onboarding_widget.dart';
 import '../../services/auth_api.dart';
+import '../../services/pets_api.dart';
 import '../../services/token_store.dart';
 
 enum AgeInputMode { age, birthdate }
@@ -133,7 +134,7 @@ class _OnboardingFlowState extends State<OnboardingFlow> {
           "birthdate": birthDate!.toIso8601String().split('T').first,
       };
 
-      await AuthApi.createPet(accessToken: access, body: petBody);
+      await PetsApi.createPet(body: petBody);
 
       if (!mounted) return;
 
