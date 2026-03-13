@@ -85,32 +85,6 @@ class AuthApi {
     return jsonDecode(res.body) as Map<String, dynamic>;
   }
 
-  Future<String?> refreshAccessToken() async {
-      final refreshToken = await TokenStore.readRefresh();
-
-      if (refreshToken == null) return null;
-
-      final response = await http.post(
-        _u("/api/auth/token/refresh/"),
-        headers: {"Content-Type": "application/json"},
-        body: jsonEncode({"refresh": refreshToken}),
-      );
-
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        final newAccess = data["access"];
-
-        await TokenStore.saveAccessToken(newAccess);
-        return newAccess;
-      }
-
-      return null; // refresh failed
-    }
-
-  static Future<Map<String, dynamic>> createPet({
-    required String accessToken,
-    required Map<String, dynamic> body,
-  }) async {
   static Future<String> refreshAccess({required String refreshToken}) async {
     final res = await http.post(
       _u("/api/accounts/token/refresh/"),
@@ -128,6 +102,76 @@ class AuthApi {
       throw "Refresh response missing access token";
     }
     return access;
+  }
+
+  Future<String?> refreshAccessToken() async {
+    final refreshToken = await TokenStore.readRefresh();
+
+    if (refreshToken == null) return null;
+
+    final response = await http.post(
+      _u("/api/auth/token/refresh/"),
+      headers: {"Content-Type": "application/json"},
+      body: jsonEncode({"refresh": refreshToken}),
+    );
+
+    if (response.statusCode == 200) {
+      final data = jsonDecode(response.body);
+      final newAccess = data["access"];
+
+      await TokenStore.saveAccessToken(newAccess);
+      return newAccess;
+    }
+
+    return null; // refresh failed
+  }
+
+  static Future<Map<String, dynamic>> createPet({
+    required String accessToken,
+    required Map<String, dynamic> body,
+  }) async {
+    final res = await http.post(
+      _u("/api/pets/"),
+      headers: {
+        "Authorization": "Bearer $accessToken",
+        "Content-Type": "application/json",
+      },
+      body: jsonEncode(body),
+    );
+
+    if (res.statusCode < 200 || res.statusCode >= 300) {
+      throw _extractError(res.body) ??
+          "Failed to create pet (${res.statusCode})";
+    }
+
+    return jsonDecode(res.body) as Map<String, dynamic>;
+  }
+
+  static Future<List<Map<String, dynamic>>> listPets({
+    required String accessToken,
+  }) async {
+    final res = await http.get(
+      _u("/api/pets/"),
+      headers: {
+        "Authorization": "Bearer $accessToken",
+        "Content-Type": "application/json",
+      },
+    );
+
+    if (res.statusCode < 200 || res.statusCode >= 300) {
+      throw _extractError(res.body) ??
+          "Failed to load pets (${res.statusCode})";
+    }
+
+    final decoded = jsonDecode(res.body);
+
+    if (decoded is List) {
+      return decoded.cast<Map<String, dynamic>>();
+    }
+    if (decoded is Map && decoded["results"] is List) {
+      return (decoded["results"] as List).cast<Map<String, dynamic>>();
+    }
+    throw "Unexpected pets response format";
   }
 
   static String? _extractError(String body) {
