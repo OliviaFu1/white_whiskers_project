@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:frontend/pages/repositories/notification_repository.dart';
-import 'package:frontend/services/auth_http.dart';
 import 'package:frontend/state/auth_state.dart';
 import 'package:frontend/state/notifiers.dart';
 import '../../services/auth_api.dart';
@@ -53,11 +52,11 @@ class _LoginPageState extends State<LoginPage> {
       await TokenStore.save(access: access, refresh: refresh);
 
       // final tokenStore = TokenStore();
-      final authApi = AuthApi();
-      final authHttp = AuthHttp(authApi);
+      // final authApi = AuthApi();
+      // final authHttp = ApiClient.get(authApi);
 
-      notificationRepository = ApiNotificationRepository(authHttp);
-
+      // notificationRepository = ApiNotificationRepository(authHttp);
+      notificationRepository = ApiNotificationRepository();
       if (!mounted) return;
       //bug with pushing getting rid of the authstate
       // Navigator.pushReplacementNamed(context, '/post-login');

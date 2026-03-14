@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:frontend/main.dart';
 import 'package:frontend/pages/auth/auth_gate.dart';
 import 'package:frontend/services/token_store.dart';
 import 'package:frontend/state/auth_state.dart';
@@ -12,7 +13,7 @@ class ProfilePage extends StatelessWidget {
 
     if (!context.mounted) return;
 
-    Navigator.of(context).pushAndRemoveUntil(
+    navigatorKey.currentState?.pushAndRemoveUntil(
       MaterialPageRoute(builder: (_) => const AuthGate()),
       (route) => false,
     );

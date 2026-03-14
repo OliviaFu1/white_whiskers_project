@@ -6,19 +6,20 @@ import 'pages/main_pages/mypet_page.dart';
 import 'pages/onboarding/onboarding_flow.dart';
 import 'pages/auth/post_login_gate.dart';
 
+final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-
   runApp(MyApp());
 }
 
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
-
+  
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
+      navigatorKey: navigatorKey,
       theme: ThemeData(
         scaffoldBackgroundColor: const Color(0xFFFBF2EB),
         useMaterial3: true,

@@ -1,4 +1,8 @@
 import 'dart:convert';
+import 'package:flutter/material.dart';
+import 'package:frontend/main.dart';
+import 'package:frontend/pages/auth/auth_gate.dart';
+import 'package:frontend/state/auth_state.dart';
 import 'package:http/http.dart' as http;
 
 import '../config.dart';
@@ -13,35 +17,37 @@ class ApiClient {
     "Content-Type": "application/json",
   };
 
-  /// GET with automatic refresh+retry on 401
+  static Future<String>? _refreshFuture;
+
+  /// GET with refresh+retry
   static Future<http.Response> get(
     String path, {
     Map<String, String>? queryParameters,
   }) async {
     final access = await TokenStore.readAccess();
-    if (access == null) throw "No access token found.";
+    if (access == null) throw "No access token.";
 
     final uri = _u(path).replace(queryParameters: queryParameters);
     final res = await http.get(uri, headers: _headers(access));
 
     if (res.statusCode != 401) return res;
 
-    // try refresh once
-    final refreshed = await _refreshAccessOrThrow();
-    final res2 = await http.get(uri, headers: _headers(refreshed));
+    final newAccess = await _refreshAccessLocked();
+    final res2 = await http.get(uri, headers: _headers(newAccess));
     return res2;
   }
 
-  /// POST with automatic refresh+retry on 401
+  /// POST with refresh+retry
   static Future<http.Response> post(
     String path, {
     Map<String, String>? queryParameters,
     Object? jsonBody,
   }) async {
     final access = await TokenStore.readAccess();
-    if (access == null) throw "No access token found.";
+    if (access == null) throw "No access token.";
 
     final uri = _u(path).replace(queryParameters: queryParameters);
+
     final res = await http.post(
       uri,
       headers: _headers(access),
@@ -50,25 +56,26 @@ class ApiClient {
 
     if (res.statusCode != 401) return res;
 
-    final refreshed = await _refreshAccessOrThrow();
-    final res2 = await http.post(
+    final newAccess = await _refreshAccessLocked();
+
+    return await http.post(
       uri,
-      headers: _headers(refreshed),
+      headers: _headers(newAccess),
       body: jsonBody == null ? null : jsonEncode(jsonBody),
     );
-    return res2;
   }
 
-  /// PATCH with automatic refresh+retry on 401
+  /// PATCH with refresh+retry
   static Future<http.Response> patch(
     String path, {
     Map<String, String>? queryParameters,
     Object? jsonBody,
   }) async {
     final access = await TokenStore.readAccess();
-    if (access == null) throw "No access token found.";
+    if (access == null) throw "No access token.";
 
     final uri = _u(path).replace(queryParameters: queryParameters);
+
     final res = await http.patch(
       uri,
       headers: _headers(access),
@@ -77,19 +84,39 @@ class ApiClient {
 
     if (res.statusCode != 401) return res;
 
-    final refreshed = await _refreshAccessOrThrow();
-    final res2 = await http.patch(
+    final newAccess = await _refreshAccessLocked();
+
+    return await http.patch(
       uri,
-      headers: _headers(refreshed),
+      headers: _headers(newAccess),
       body: jsonBody == null ? null : jsonEncode(jsonBody),
     );
-    return res2;
   }
 
-  static Future<String> _refreshAccessOrThrow() async {
+  /// Ensures only one refresh runs at a time
+  static Future<String> _refreshAccessLocked() async {
+    if (_refreshFuture != null) {
+      return _refreshFuture!;
+    }
+
+    _refreshFuture = _refreshAccess();
+
+    try {
+      return await _refreshFuture!;
+    } finally {
+      _refreshFuture = null;
+    }
+  }
+
+  static Future<String> _refreshAccess() async {
     final refresh = await TokenStore.readRefresh();
     if (refresh == null) {
       await TokenStore.clear();
+      AuthState.instance.logout();
+      navigatorKey.currentState?.pushAndRemoveUntil(
+        MaterialPageRoute(builder: (_) => const AuthGate()),
+        (route) => false,
+      );
       throw "Session expired. Please log in again.";
     }
 
@@ -99,6 +126,11 @@ class ApiClient {
       return newAccess;
     } catch (e) {
       await TokenStore.clear();
+      AuthState.instance.logout();
+      navigatorKey.currentState?.pushAndRemoveUntil(
+        MaterialPageRoute(builder: (_) => const AuthGate()),
+        (route) => false,
+      );
       throw "Session expired. Please log in again.";
     }
   }

@@ -1,7 +1,6 @@
 import 'dart:convert';
-import 'package:frontend/config.dart';
 import 'package:frontend/models/app_notification.dart';
-import 'package:frontend/services/auth_http.dart';
+import 'package:frontend/services/api_client.dart';
 
 abstract class NotificationRepository {
   Future<List<AppNotification>> fetchNotifications();
@@ -10,15 +9,14 @@ abstract class NotificationRepository {
 }
 
 class ApiNotificationRepository implements NotificationRepository {
-  static Uri _u(String path) => Uri.parse("${AppConfig.apiBaseUrl}$path");
+  // static Uri _u(String path) => Uri.parse("${AppConfig.apiBaseUrl}$path");
 
-  final AuthHttp authHttp;
-  ApiNotificationRepository(this.authHttp);
+  // final ApiClient apiClient;
 
   @override
   Future<List<AppNotification>> fetchNotifications() async {
     try {
-      final response = await authHttp.get(_u("/api/notifications/"));
+      final response = await ApiClient.get("/api/notifications/");
 
       if (response.statusCode == 200) {
         if (response.body.isEmpty) return [];
@@ -49,8 +47,8 @@ class ApiNotificationRepository implements NotificationRepository {
 
   @override
   Future<void> markRead(String id) async {
-    final response = await authHttp.patch(
-      _u("/api/notifications/$id/mark-read/"),
+    final response = await ApiClient.patch(
+      "/api/notifications/$id/mark-read/"
     );
     if (response.statusCode != 200) {
       throw Exception("Failed to mark read");
@@ -59,8 +57,8 @@ class ApiNotificationRepository implements NotificationRepository {
 
   @override
   Future<void> generateTestNotification() async {
-    final response = await authHttp.post(
-      _u("/api/notifications/generate_test/"),
+    final response = await ApiClient.post(
+      "/api/notifications/generate_test/"
     );
     if (response.statusCode != 200) {
       throw Exception("Failed to generate test notification");
