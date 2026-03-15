@@ -1,7 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:frontend/services/notifications_service.dart';
-import 'package:frontend/services/pet_store.dart';
-import 'package:frontend/services/pets_api.dart';
 import 'package:frontend/state/auth_state.dart';
 import 'package:frontend/state/notifiers.dart';
 import 'package:frontend/models/app_notification.dart';
@@ -29,16 +27,6 @@ class _AppShellState extends State<AppShell> {
     super.initState();
     _refresher.start();
     AuthState.instance.addListener(_authListener);
-    _loadCurrentPet();
-  }
-
-  Future<void> _loadCurrentPet() async {
-    try {
-      final pets = await PetsApi.listPets();
-      if (pets.isNotEmpty) {
-        await PetStore.setCurrentPetId(pets.first["id"] as int);
-      }
-    } catch (_) {}
   }
 
   void _authListener() {

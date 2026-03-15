@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:frontend/pages/app_shell.dart';
 import 'package:frontend/services/notifications_service.dart';
+import 'package:frontend/services/pet_store.dart';
+import 'package:frontend/services/pets_api.dart';
 import 'package:frontend/state/auth_state.dart';
 import '../../services/auth_api.dart';
 import '../../services/token_store.dart';
@@ -47,6 +49,11 @@ class _PostLoginGateState extends State<PostLoginGate> {
       if (access == null) throw "No access token found.";
 
       final data = await AuthApi.me(accessToken: access);
+
+      final pets = await PetsApi.listPets();
+      if (pets.isNotEmpty) {
+        await PetStore.setCurrentPetId(pets.first["id"] as int);
+      }
 
       setState(() {
         me = data;
