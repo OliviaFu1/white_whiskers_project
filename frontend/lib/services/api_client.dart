@@ -111,8 +111,7 @@ class ApiClient {
   static Future<String> _refreshAccess() async {
     final refresh = await TokenStore.readRefresh();
     if (refresh == null) {
-      await TokenStore.clear();
-      AuthState.instance.logout();
+      await AuthState.instance.logout();
       navigatorKey.currentState?.pushAndRemoveUntil(
         MaterialPageRoute(builder: (_) => const AuthGate()),
         (route) => false,
@@ -125,8 +124,7 @@ class ApiClient {
       await TokenStore.save(access: newAccess, refresh: refresh);
       return newAccess;
     } catch (e) {
-      await TokenStore.clear();
-      AuthState.instance.logout();
+      await AuthState.instance.logout();
       navigatorKey.currentState?.pushAndRemoveUntil(
         MaterialPageRoute(builder: (_) => const AuthGate()),
         (route) => false,

@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:frontend/main.dart';
+import 'package:frontend/pages/auth/auth_gate.dart';
 import '../../services/auth_api.dart';
 
 class RegisterPage extends StatefulWidget {
@@ -66,7 +68,10 @@ class _RegisterPageState extends State<RegisterPage> {
         const SnackBar(content: Text("Registered! Please log in.")),
       );
 
-      Navigator.pushReplacementNamed(context, '/login');
+      navigatorKey.currentState?.pushAndRemoveUntil(
+        MaterialPageRoute(builder: (_) => const AuthGate()),
+        (route) => false,
+      );
       // add verification:
       // Navigator.pushReplacementNamed(context, '/verify', arguments: email);
     } catch (e) {
@@ -108,7 +113,8 @@ class _RegisterPageState extends State<RegisterPage> {
                           ? AutovalidateMode.always
                           : AutovalidateMode.disabled,
                       onChanged: (_) {
-                        if (!_emailTouched) setState(() => _emailTouched = true);
+                        if (!_emailTouched)
+                          setState(() => _emailTouched = true);
                         setState(() {}); // updates button enable state
                       },
                       decoration: const InputDecoration(
@@ -120,7 +126,8 @@ class _RegisterPageState extends State<RegisterPage> {
                       validator: (value) {
                         final v = (value ?? "").trim();
                         if (v.isEmpty) return "Email is required.";
-                        if (!_isValidEmail(v)) return "Please enter a valid email address.";
+                        if (!_isValidEmail(v))
+                          return "Please enter a valid email address.";
                         return null;
                       },
                     ),
@@ -129,8 +136,9 @@ class _RegisterPageState extends State<RegisterPage> {
                     TextFormField(
                       controller: passwordController,
                       obscureText: true,
-                      autovalidateMode:
-                          _pwTouched ? AutovalidateMode.always : AutovalidateMode.disabled,
+                      autovalidateMode: _pwTouched
+                          ? AutovalidateMode.always
+                          : AutovalidateMode.disabled,
                       onChanged: (_) {
                         if (!_pwTouched) setState(() => _pwTouched = true);
                         setState(() {});
@@ -144,7 +152,8 @@ class _RegisterPageState extends State<RegisterPage> {
                       validator: (value) {
                         final v = value ?? "";
                         if (v.isEmpty) return "Password is required.";
-                        if (v.length < 8) return "Ensure this field has at least 8 characters.";
+                        if (v.length < 8)
+                          return "Ensure this field has at least 8 characters.";
                         return null;
                       },
                     ),
@@ -157,7 +166,8 @@ class _RegisterPageState extends State<RegisterPage> {
                           ? AutovalidateMode.always
                           : AutovalidateMode.disabled,
                       onChanged: (_) {
-                        if (!_confirmTouched) setState(() => _confirmTouched = true);
+                        if (!_confirmTouched)
+                          setState(() => _confirmTouched = true);
                         setState(() {});
                       },
                       decoration: const InputDecoration(
@@ -169,7 +179,8 @@ class _RegisterPageState extends State<RegisterPage> {
                       validator: (value) {
                         final v = value ?? "";
                         if (v.isEmpty) return "Please confirm your password.";
-                        if (v != passwordController.text) return "Passwords do not match.";
+                        if (v != passwordController.text)
+                          return "Passwords do not match.";
                         return null;
                       },
                     ),
@@ -213,7 +224,10 @@ class _RegisterPageState extends State<RegisterPage> {
               const Spacer(),
 
               TextButton(
-                onPressed: () => Navigator.pushReplacementNamed(context, '/login'),
+                onPressed: () => navigatorKey.currentState?.pushAndRemoveUntil(
+                  MaterialPageRoute(builder: (_) => const AuthGate()),
+                  (route) => false,
+                ),
                 child: const Text(
                   "Already have an account?",
                   style: TextStyle(color: Color(0xFF676767)),
