@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import '../../services/pets_api.dart';
 import '../../services/pet_store.dart';
 import '../../services/token_store.dart';
+import '../assessment/assessment_page.dart';
+import '../../services/user_store.dart';
 
 class MypetPage extends StatefulWidget {
   const MypetPage({super.key});
@@ -109,7 +111,11 @@ class _MypetPageState extends State<MypetPage> {
 
           _actionRow(Icons.add_circle_outline, "Add a new pet", onTap: () {}),
           _actionRow(Icons.group_outlined, "Add a family member", onTap: () {}),
-          _actionRow(Icons.add_circle_outline, "Take a new test", onTap: () {}),
+          _actionRow(
+            Icons.add_circle_outline,
+            "Take a new test",
+            onTap: _handleTakeNewTest,
+          ),
         ],
       ),
     );
@@ -283,6 +289,109 @@ class _MypetPageState extends State<MypetPage> {
       leading: Icon(icon, size: 20, color: muted),
       title: Text(label, style: const TextStyle(fontSize: 18, color: muted)),
       onTap: onTap,
+    );
+  }
+
+  Future<void> _handleTakeNewTest() async {
+    if (pets.isEmpty) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text("Please add a pet first.")));
+      return;
+    }
+
+    if (pets.length == 1) {
+      await _startAssessmentForPet(pets.first);
+      return;
+    }
+
+    final selectedPet = await _pickPetForAssessment();
+    if (selectedPet == null || !mounted) return;
+
+    await _startAssessmentForPet(selectedPet);
+  }
+
+  Future<void> _startAssessmentForPet(Map<String, dynamic> pet) async {
+    final petId = pet["id"] as int?;
+    final petName = (pet["name"] ?? "").toString().trim();
+
+    if (petId != null) {
+      await PetStore.setCurrentPetId(petId);
+    }
+
+    final ownerName = await UserStore.getOwnerName();
+
+    if (!mounted) return;
+
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => AssessmentPage(
+          petName: petName.isEmpty ? "Your pet" : petName,
+          ownerName: ownerName ?? "Owner",
+        ),
+      ),
+    );
+  }
+
+  Future<Map<String, dynamic>?> _pickPetForAssessment() async {
+    return showModalBottomSheet<Map<String, dynamic>>(
+      context: context,
+      backgroundColor: bg,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (context) {
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(20, 20, 20, 24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  "Select a pet",
+                  style: TextStyle(
+                    fontSize: 22,
+                    fontWeight: FontWeight.w700,
+                    color: titleColor,
+                  ),
+                ),
+                const SizedBox(height: 16),
+                ...pets.map((pet) {
+                  final petName = (pet["name"] ?? "").toString().trim();
+                  final breed = (pet["breed_text"] ?? "").toString().trim();
+                  final species = (pet["species"] ?? "").toString().trim();
+
+                  final subtitle = [
+                    if (breed.isNotEmpty) breed,
+                    if (species.isNotEmpty) species,
+                  ].join(" • ");
+
+                  return ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    leading: const CircleAvatar(
+                      backgroundColor: Colors.white,
+                      child: Icon(Icons.pets, color: muted),
+                    ),
+                    title: Text(
+                      petName.isEmpty ? "Unnamed pet" : petName,
+                      style: const TextStyle(
+                        color: muted,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    subtitle: subtitle.isEmpty
+                        ? null
+                        : Text(subtitle, style: const TextStyle(color: muted)),
+                    trailing: const Icon(Icons.chevron_right, color: muted),
+                    onTap: () => Navigator.of(context).pop(pet),
+                  );
+                }),
+              ],
+            ),
+          ),
+        );
+      },
     );
   }
 }

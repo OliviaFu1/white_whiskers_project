@@ -6,6 +6,7 @@ import 'onboarding_widget.dart';
 import '../../services/auth_api.dart';
 import '../../services/pets_api.dart';
 import '../../services/token_store.dart';
+import '../../services/user_store.dart';
 
 enum AgeInputMode { age, birthdate }
 
@@ -98,6 +99,7 @@ class _OnboardingFlowState extends State<OnboardingFlow> {
       if (access == null) throw "Session expired. Please log in again.";
 
       await AuthApi.updateMe(accessToken: access, name: ownerName.text.trim());
+      await UserStore.setOwnerName(ownerName.text.trim());
 
       if (!mounted) return;
       setState(() => _savingName = false);
@@ -366,7 +368,12 @@ class _OnboardingFlowState extends State<OnboardingFlow> {
               GestureDetector(
                 onTap: _savingFinal
                     ? null
-                    : () => _finalizeAndGo(const AssessmentPage()),
+                    : () => _finalizeAndGo(
+                        AssessmentPage(
+                          petName: petName.text.trim(),
+                          ownerName: ownerName.text.trim(),
+                        ),
+                      ),
                 child: Text(
                   _savingFinal ? "saving..." : "start first assessment",
                   style: const TextStyle(
