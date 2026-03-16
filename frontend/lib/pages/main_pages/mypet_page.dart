@@ -312,12 +312,8 @@ class _MypetPageState extends State<MypetPage> {
   }
 
   Future<void> _startAssessmentForPet(Map<String, dynamic> pet) async {
-    final petId = pet["id"] as int?;
+    final petId = pet["id"] as int;
     final petName = (pet["name"] ?? "").toString().trim();
-
-    if (petId != null) {
-      await PetStore.setCurrentPetId(petId);
-    }
 
     final ownerName = await UserStore.getOwnerName();
 
@@ -326,6 +322,7 @@ class _MypetPageState extends State<MypetPage> {
     Navigator.of(context).push(
       MaterialPageRoute(
         builder: (_) => AssessmentPage(
+          petId: petId,
           petName: petName.isEmpty ? "Your pet" : petName,
           ownerName: ownerName ?? "Owner",
         ),

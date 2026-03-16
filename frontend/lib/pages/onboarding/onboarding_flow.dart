@@ -113,7 +113,7 @@ class _OnboardingFlowState extends State<OnboardingFlow> {
     }
   }
 
-  Future<void> _finalizeAndGo(Widget page) async {
+  Future<void> _finalizeAndGo({required bool goToAssessment}) async {
     if (_savingFinal) return;
 
     setState(() {
@@ -122,9 +122,6 @@ class _OnboardingFlowState extends State<OnboardingFlow> {
     });
 
     try {
-      final access = await TokenStore.readAccess();
-      if (access == null) throw "No access token found.";
-
       final petBody = <String, dynamic>{
         "name": petName.text.trim(),
         "species": species,
@@ -136,12 +133,25 @@ class _OnboardingFlowState extends State<OnboardingFlow> {
           "birthdate": birthDate!.toIso8601String().split('T').first,
       };
 
-      await PetsApi.createPet(body: petBody);
+      final createdPet = await PetsApi.createPet(body: petBody);
+      final petId = createdPet["id"];
+
+      if (petId == null) {
+        throw "Pet created but no pet id was returned.";
+      }
 
       if (!mounted) return;
 
+      final Widget nextPage = goToAssessment
+          ? AssessmentPage(
+              petId: petId as int,
+              petName: petName.text.trim(),
+              ownerName: ownerName.text.trim(),
+            )
+          : const AppShell();
+
       Navigator.of(context).pushAndRemoveUntil(
-        MaterialPageRoute(builder: (_) => page),
+        MaterialPageRoute(builder: (_) => nextPage),
         (route) => false,
       );
     } catch (e) {
@@ -368,12 +378,7 @@ class _OnboardingFlowState extends State<OnboardingFlow> {
               GestureDetector(
                 onTap: _savingFinal
                     ? null
-                    : () => _finalizeAndGo(
-                        AssessmentPage(
-                          petName: petName.text.trim(),
-                          ownerName: ownerName.text.trim(),
-                        ),
-                      ),
+                    : () => _finalizeAndGo(goToAssessment: true),
                 child: Text(
                   _savingFinal ? "saving..." : "start first assessment",
                   style: const TextStyle(
@@ -387,7 +392,7 @@ class _OnboardingFlowState extends State<OnboardingFlow> {
               GestureDetector(
                 onTap: _savingFinal
                     ? null
-                    : () => _finalizeAndGo(const AppShell()),
+                    : () => _finalizeAndGo(goToAssessment: false),
                 child: Text(
                   _savingFinal ? "saving..." : "Homepage",
                   style: const TextStyle(

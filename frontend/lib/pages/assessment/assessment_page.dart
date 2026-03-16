@@ -1,11 +1,15 @@
 import 'package:flutter/material.dart';
+import '../../services/assessment_api.dart';
+import '../app_shell.dart';
 
 class AssessmentPage extends StatefulWidget {
+  final int petId;
   final String petName;
   final String ownerName;
 
   const AssessmentPage({
     super.key,
+    required this.petId,
     required this.petName,
     required this.ownerName,
   });
@@ -17,6 +21,9 @@ class AssessmentPage extends StatefulWidget {
 class _AssessmentPageState extends State<AssessmentPage> {
   late final PageController _pageController;
   int _currentPage = 0;
+
+  bool _isSubmitting = false;
+  String? _submitError;
 
   final Map<String, dynamic> _answers = {
     "favorite_pet_things": <String>["", "", ""],
@@ -71,8 +78,7 @@ class _AssessmentPageState extends State<AssessmentPage> {
     return [
       _AssessmentStep(
         id: "intro_favorites",
-        title:
-            "In Your Words...",
+        title: "In Your Words...",
         description: null,
         builder: _buildFavoritesStep,
       ),
@@ -349,6 +355,98 @@ class _AssessmentPageState extends State<AssessmentPage> {
         "Call Now: (719) 799 - 6670";
   }
 
+  Map<String, dynamic> _buildAssessmentPayload() {
+    return {
+      "pet": widget.petId,
+      "answers": {
+        "favorite_pet_things": List<String>.from(
+          _answers["favorite_pet_things"] as List,
+        ),
+        "favorite_shared_things": List<String>.from(
+          _answers["favorite_shared_things"] as List,
+        ),
+        "biggest_concerns": List<String>.from(
+          _answers["biggest_concerns"] as List,
+        ),
+        "other_concern_text": _answers["other_concern_text"],
+        "concerns_expand": _answers["concerns_expand"],
+        "concern_duration": _answers["concern_duration"],
+        "last_30_days": _answers["last_30_days"],
+        "boundaries": _answers["boundaries"],
+        "preference_info": _answers["preference_info"],
+        "which_best_describes_you": _answers["which_best_describes_you"],
+        "pet_tolerance": _answers["pet_tolerance"],
+        "medicine_success": _answers["medicine_success"],
+        "physical_score": _answers["physical_score"],
+        "physical_explanation": _answers["physical_explanation"],
+        "appetite_score": _answers["appetite_score"],
+        "appetite_explanation": _answers["appetite_explanation"],
+        "food_relationship": _answers["food_relationship"],
+        "hydration_score": _answers["hydration_score"],
+        "hydration_explanation": _answers["hydration_explanation"],
+        "mobility_score": _answers["mobility_score"],
+        "mobility_explanation": _answers["mobility_explanation"],
+        "cleanliness_score": _answers["cleanliness_score"],
+        "cleanliness_explanation": _answers["cleanliness_explanation"],
+        "behavior_change_notes": _answers["behavior_change_notes"],
+        "state_of_mind_score": _answers["state_of_mind_score"],
+        "state_of_mind_explanation": _answers["state_of_mind_explanation"],
+        "joy_items": List<Map<String, dynamic>>.from(
+          (_answers["joy_items"] as List).map(
+            (e) => Map<String, dynamic>.from(e as Map),
+          ),
+        ),
+        "joy_explanation": _answers["joy_explanation"],
+        "owner_state_score": _answers["owner_state_score"],
+        "owner_state_explanation": _answers["owner_state_explanation"],
+      },
+      "heart_score": _heartScore(),
+      "condition_score": _conditionScore(),
+    };
+  }
+
+  Future<void> _submitAssessment() async {
+    if (_isSubmitting) return;
+
+    setState(() {
+      _isSubmitting = true;
+      _submitError = null;
+    });
+
+    try {
+      final saved = await AssessmentApi.createAssessment(
+        body: _buildAssessmentPayload(),
+      );
+
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text("Assessment saved.")));
+
+      Navigator.of(context).pushAndRemoveUntil(
+        MaterialPageRoute(builder: (_) => const AppShell()),
+        (route) => false,
+      );
+    } catch (e) {
+      if (!mounted) return;
+
+      setState(() {
+        _submitError = e.toString();
+      });
+
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text("Failed to save assessment: $e")));
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isSubmitting = false;
+        });
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -393,10 +491,11 @@ class _AssessmentPageState extends State<AssessmentPage> {
             _BottomNavBar(
               canGoBack: _currentPage > 0,
               isLast: _currentPage == _steps.length - 1,
+              isLoading: _isSubmitting,
               onBack: _goBack,
               onNext: () {
                 if (_currentPage == _steps.length - 1) {
-                  Navigator.of(context).maybePop();
+                  _submitAssessment();
                 } else {
                   if (_steps[_currentPage].id == "intro_favorites") {
                     _syncJoyItemsFromFavorites();
@@ -804,7 +903,8 @@ class _AssessmentPageState extends State<AssessmentPage> {
         const SizedBox(height: 12),
         _FieldTitle(
           "Joy Explanation",
-          description: "Additional thoughts on PETSNAME's daily joy...",
+          description:
+              "Additional thoughts on ${widget.petName}'s daily joy...",
         ),
         const SizedBox(height: 10),
         _TextAnswerField(
@@ -1458,12 +1558,14 @@ class _MutedParagraph extends StatelessWidget {
 class _BottomNavBar extends StatelessWidget {
   final bool canGoBack;
   final bool isLast;
+  final bool isLoading;
   final VoidCallback onBack;
   final VoidCallback onNext;
 
   const _BottomNavBar({
     required this.canGoBack,
     required this.isLast,
+    required this.isLoading,
     required this.onBack,
     required this.onNext,
   });
@@ -1480,7 +1582,7 @@ class _BottomNavBar extends StatelessWidget {
               child: SizedBox(
                 height: 50,
                 child: OutlinedButton(
-                  onPressed: canGoBack ? onBack : null,
+                  onPressed: canGoBack && !isLoading ? onBack : null,
                   style: OutlinedButton.styleFrom(
                     backgroundColor: Colors.transparent,
                     side: BorderSide(color: Colors.grey.shade400),
@@ -1497,14 +1599,20 @@ class _BottomNavBar extends StatelessWidget {
               child: SizedBox(
                 height: 50,
                 child: FilledButton(
-                  onPressed: onNext,
+                  onPressed: isLoading ? null : onNext,
                   style: FilledButton.styleFrom(
                     backgroundColor: const Color(0xFF8B6B5C),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(14),
                     ),
                   ),
-                  child: Text(isLast ? "Done" : "Next"),
+                  child: isLoading
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : Text(isLast ? "Done" : "Next"),
                 ),
               ),
             ),
