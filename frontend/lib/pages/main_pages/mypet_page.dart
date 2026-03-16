@@ -4,6 +4,10 @@ import '../../services/pet_store.dart';
 import '../../services/token_store.dart';
 import '../assessment/assessment_page.dart';
 import '../../services/user_store.dart';
+import '../../services/assessment_api.dart';
+import '../assessment/assessment_results.dart';
+
+// TODO: now the pet is assumed to be first pet, need to update to selected pet
 
 class MypetPage extends StatefulWidget {
   const MypetPage({super.key});
@@ -19,9 +23,11 @@ class _MypetPageState extends State<MypetPage> {
   static const muted = Color(0xFF676767);
 
   bool isLoading = true;
+  bool isLoadingAssessment = false;
   String? errorText;
 
   List<Map<String, dynamic>> pets = [];
+  Map<String, dynamic>? latestAssessment;
 
   @override
   void initState() {
@@ -41,14 +47,49 @@ class _MypetPageState extends State<MypetPage> {
         await PetStore.setCurrentPetId(firstPetId);
       }
 
+      if (!mounted) return;
+
       setState(() {
         pets = petList;
         isLoading = false;
       });
+
+      if (petList.isNotEmpty) {
+        final firstPetId = petList.first["id"] as int;
+        await _loadLatestAssessment(firstPetId);
+      }
     } catch (e) {
+      if (!mounted) return;
+
       setState(() {
         errorText = e.toString();
         isLoading = false;
+      });
+    }
+  }
+
+  Future<void> _loadLatestAssessment(int petId) async {
+    if (!mounted) return;
+
+    setState(() {
+      isLoadingAssessment = true;
+    });
+
+    try {
+      final assessment = await AssessmentApi.getLatestAssessment(petId: petId);
+
+      if (!mounted) return;
+
+      setState(() {
+        latestAssessment = assessment;
+        isLoadingAssessment = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+
+      setState(() {
+        latestAssessment = null;
+        isLoadingAssessment = false;
       });
     }
   }
@@ -61,13 +102,13 @@ class _MypetPageState extends State<MypetPage> {
         child: isLoading
             ? const Center(child: CircularProgressIndicator())
             : errorText != null
-            ? Center(
-                child: Text(
-                  errorText!,
-                  style: const TextStyle(color: Colors.red),
-                ),
-              )
-            : _content(),
+                ? Center(
+                    child: Text(
+                      errorText!,
+                      style: const TextStyle(color: Colors.red),
+                    ),
+                  )
+                : _content(),
       ),
     );
   }
@@ -88,17 +129,11 @@ class _MypetPageState extends State<MypetPage> {
               color: titleColor,
             ),
           ),
-
           const SizedBox(height: 14),
-
           pet == null ? _emptyPetCard() : _petCard(pet),
-
           const SizedBox(height: 14),
-
-          _historyCard(),
-
+          _historyCard(pet),
           const SizedBox(height: 22),
-
           const Text(
             "More actions",
             style: TextStyle(
@@ -108,7 +143,6 @@ class _MypetPageState extends State<MypetPage> {
             ),
           ),
           const SizedBox(height: 5),
-
           _actionRow(Icons.add_circle_outline, "Add a new pet", onTap: () {}),
           _actionRow(Icons.group_outlined, "Add a family member", onTap: () {}),
           _actionRow(
@@ -123,7 +157,7 @@ class _MypetPageState extends State<MypetPage> {
 
   BoxDecoration _cardDecoration() {
     return BoxDecoration(
-      color: Colors.white.withValues(),
+      color: Colors.white,
       borderRadius: BorderRadius.circular(18),
       boxShadow: const [
         BoxShadow(
@@ -152,7 +186,6 @@ class _MypetPageState extends State<MypetPage> {
     final species = (pet["species"] ?? "").toString().trim();
     final sex = (pet["sex"] ?? "").toString().trim();
 
-    // Build a simple 2–3 line info block without extra formatting
     final infoLines = <String>[
       if (breed.isNotEmpty) breed,
       if (species.isNotEmpty) species,
@@ -192,9 +225,7 @@ class _MypetPageState extends State<MypetPage> {
                     infoLines.join("\n"),
                     style: const TextStyle(fontSize: 12, color: muted),
                   ),
-
                 const SizedBox(height: 10),
-
                 const Text(
                   "Favorite Foods",
                   style: TextStyle(
@@ -204,9 +235,7 @@ class _MypetPageState extends State<MypetPage> {
                   ),
                 ),
                 const Text("—", style: TextStyle(fontSize: 12, color: muted)),
-
                 const SizedBox(height: 8),
-
                 const Text(
                   "Favorite Activities",
                   style: TextStyle(
@@ -216,9 +245,7 @@ class _MypetPageState extends State<MypetPage> {
                   ),
                 ),
                 const Text("—", style: TextStyle(fontSize: 12, color: muted)),
-
                 const SizedBox(height: 8),
-
                 const Text(
                   "Medication history",
                   style: TextStyle(
@@ -235,45 +262,172 @@ class _MypetPageState extends State<MypetPage> {
     );
   }
 
-  Widget _historyCard() {
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: _cardDecoration(),
-      child: Row(
-        children: const [
-          SizedBox(width: 4),
-          Text("—", style: TextStyle(color: muted)),
-          Spacer(),
-          Text(
-            "heart ",
-            style: TextStyle(color: muted, fontWeight: FontWeight.w600),
+  Widget _historyCard(Map<String, dynamic>? pet) {
+    final heartScore = latestAssessment?["heart_score"];
+    final conditionScore = latestAssessment?["condition_score"];
+    final assessedAtRaw = latestAssessment?["submitted_at"];
+    final assessedAtText = _formatAssessmentDate(assessedAtRaw);
+    final petName = (pet?["name"] ?? "").toString().trim();
+    final hasAssessment = latestAssessment != null;
+
+    return GestureDetector(
+      onTap: !hasAssessment
+          ? null
+          : () async {
+              await Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (_) => AssessmentResultsPage(
+                    petName: petName.isEmpty ? "Your pet" : petName,
+                    heartScore: heartScore,
+                    conditionScore: conditionScore,
+                    significantlyChallenged: _hasSignificantlyChallengedFlag(),
+                    onDone: () {
+                      Navigator.of(context).pop();
+                    },
+                  ),
+                ),
+              );
+            },
+      child: Opacity(
+        opacity: hasAssessment ? 1.0 : 0.75,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
+          decoration: _cardDecoration(),
+          child: Row(
+            children: [
+              SizedBox(
+                width: 84,
+                child: Text(
+                  isLoadingAssessment
+                      ? "Loading..."
+                      : (assessedAtText ?? "No recent\nassessment"),
+                  style: const TextStyle(
+                    color: muted,
+                    fontSize: 16,
+                    height: 1.1,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 5),
+              Expanded(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Row(
+                      children: const [
+                        Expanded(
+                          child: Text(
+                            "heart",
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              color: muted,
+                              fontSize: 16,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ),
+                        Expanded(
+                          child: Text(
+                            "condition",
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              color: muted,
+                              fontSize: 16,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 4),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            heartScore?.toString() ?? "—",
+                            textAlign: TextAlign.center,
+                            style: const TextStyle(
+                              color: muted,
+                              fontSize: 44,
+                              fontWeight: FontWeight.w800,
+                              height: 1,
+                            ),
+                          ),
+                        ),
+                        Expanded(
+                          child: Text(
+                            conditionScore?.toString() ?? "—",
+                            textAlign: TextAlign.center,
+                            style: const TextStyle(
+                              color: muted,
+                              fontSize: 44,
+                              fontWeight: FontWeight.w800,
+                              height: 1,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              Icon(
+                hasAssessment ? Icons.chevron_right : Icons.remove,
+                color: muted,
+                size: 28,
+              ),
+            ],
           ),
-          Text(
-            "—",
-            style: TextStyle(
-              color: muted,
-              fontSize: 34,
-              fontWeight: FontWeight.w800,
-            ),
-          ),
-          SizedBox(width: 18),
-          Text(
-            "condition ",
-            style: TextStyle(color: muted, fontWeight: FontWeight.w600),
-          ),
-          Text(
-            "—",
-            style: TextStyle(
-              color: muted,
-              fontSize: 34,
-              fontWeight: FontWeight.w800,
-            ),
-          ),
-          SizedBox(width: 6),
-          Icon(Icons.chevron_right, color: muted),
-        ],
+        ),
       ),
     );
+  }
+
+  String? _formatAssessmentDate(dynamic raw) {
+    if (raw == null) return null;
+
+    try {
+      final dt = DateTime.parse(raw.toString()).toLocal();
+
+      const months = [
+        "Jan",
+        "Feb",
+        "Mar",
+        "Apr",
+        "May",
+        "Jun",
+        "Jul",
+        "Aug",
+        "Sep",
+        "Oct",
+        "Nov",
+        "Dec",
+      ];
+
+      final month = months[dt.month - 1];
+      final day = _ordinal(dt.day);
+
+      return "$month $day\n${dt.year}";
+    } catch (_) {
+      return null;
+    }
+  }
+
+  String _ordinal(int day) {
+    if (day >= 11 && day <= 13) return "${day}th";
+
+    switch (day % 10) {
+      case 1:
+        return "${day}st";
+      case 2:
+        return "${day}nd";
+      case 3:
+        return "${day}rd";
+      default:
+        return "${day}th";
+    }
   }
 
   Widget _actionRow(
@@ -294,9 +448,9 @@ class _MypetPageState extends State<MypetPage> {
 
   Future<void> _handleTakeNewTest() async {
     if (pets.isEmpty) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text("Please add a pet first.")));
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Please add a pet first.")),
+      );
       return;
     }
 
@@ -314,12 +468,11 @@ class _MypetPageState extends State<MypetPage> {
   Future<void> _startAssessmentForPet(Map<String, dynamic> pet) async {
     final petId = pet["id"] as int;
     final petName = (pet["name"] ?? "").toString().trim();
-
     final ownerName = await UserStore.getOwnerName();
 
     if (!mounted) return;
 
-    Navigator.of(context).push(
+    final result = await Navigator.of(context).push(
       MaterialPageRoute(
         builder: (_) => AssessmentPage(
           petId: petId,
@@ -328,6 +481,15 @@ class _MypetPageState extends State<MypetPage> {
         ),
       ),
     );
+
+    if (!mounted) return;
+
+    // refresh latest assessment after coming back
+    await _loadLatestAssessment(petId);
+
+    // optional: if AssessmentPage returns something useful later,
+    // you can use `result` here
+    debugPrint("AssessmentPage returned: $result");
   }
 
   Future<Map<String, dynamic>?> _pickPetForAssessment() async {
@@ -390,5 +552,15 @@ class _MypetPageState extends State<MypetPage> {
         );
       },
     );
+  }
+
+  bool _hasSignificantlyChallengedFlag() {
+    final value = latestAssessment?["significantly_challenged"];
+
+    if (value is bool) return value;
+    if (value is String) return value.toLowerCase() == "true";
+    if (value is int) return value == 1;
+
+    return false;
   }
 }

@@ -26,13 +26,25 @@ class AssessmentApi {
     throw "Unexpected assessments response format";
   }
 
+  static Future<Map<String, dynamic>?> getLatestAssessment({
+    required int petId,
+  }) async {
+    final assessments = await listAssessments(petId: petId);
+    if (assessments.isEmpty) return null;
+
+    assessments.sort((a, b) {
+      final aTime = DateTime.parse(a["submitted_at"]);
+      final bTime = DateTime.parse(b["submitted_at"]);
+      return bTime.compareTo(aTime);
+    });
+
+    return assessments.first;
+  }
+
   static Future<Map<String, dynamic>> createAssessment({
     required Map<String, dynamic> body,
   }) async {
-    final res = await ApiClient.post(
-      "/api/assessments/",
-      jsonBody: body,
-    );
+    final res = await ApiClient.post("/api/assessments/", jsonBody: body);
 
     if (res.statusCode < 200 || res.statusCode >= 300) {
       throw _extractError(res.body) ??
@@ -42,9 +54,7 @@ class AssessmentApi {
     return jsonDecode(res.body) as Map<String, dynamic>;
   }
 
-  static Future<Map<String, dynamic>> getAssessment({
-    required int id,
-  }) async {
+  static Future<Map<String, dynamic>> getAssessment({required int id}) async {
     final res = await ApiClient.get("/api/assessments/$id/");
 
     if (res.statusCode < 200 || res.statusCode >= 300) {
@@ -55,9 +65,7 @@ class AssessmentApi {
     return jsonDecode(res.body) as Map<String, dynamic>;
   }
 
-  static Future<void> deleteAssessment({
-    required int id,
-  }) async {
+  static Future<void> deleteAssessment({required int id}) async {
     final res = await ApiClient.delete("/api/assessments/$id/");
 
     if (res.statusCode < 200 || res.statusCode >= 300) {
