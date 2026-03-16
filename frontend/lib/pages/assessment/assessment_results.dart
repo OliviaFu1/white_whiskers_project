@@ -1,10 +1,22 @@
 import 'package:flutter/material.dart';
+import 'assessment_radar_chart.dart';
+
+class AssessmentScaleScore {
+  final String label;
+  final int score; // 1-10
+
+  const AssessmentScaleScore({
+    required this.label,
+    required this.score,
+  });
+}
 
 class AssessmentResultsPage extends StatelessWidget {
   final String petName;
   final int heartScore;
   final int conditionScore;
   final bool significantlyChallenged;
+  final List<AssessmentScaleScore> scaleScores;
   final VoidCallback? onDone;
 
   static const bg = Color(0xFFFBF2EB);
@@ -18,6 +30,7 @@ class AssessmentResultsPage extends StatelessWidget {
     required this.heartScore,
     required this.conditionScore,
     required this.significantlyChallenged,
+    required this.scaleScores,
     this.onDone,
   });
 
@@ -45,6 +58,9 @@ class AssessmentResultsPage extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               _scoreSummaryCard(),
+
+              const SizedBox(height: 12),
+              _assessmentRadarCard(),
 
               const SizedBox(height: 18),
               _heartScaleCard(),
@@ -101,6 +117,77 @@ class AssessmentResultsPage extends StatelessWidget {
             ],
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _assessmentRadarCard() {
+    return _sectionCard(
+      title: "Individual Scores",
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (scaleScores.isNotEmpty)
+            Center(
+              child: Padding(
+                padding: const EdgeInsets.only(top: 4, bottom: 8),
+                child: AssessmentRadarChart(
+                  scores: scaleScores
+                      .map((e) => e.score.toDouble().clamp(1.0, 10.0))
+                      .toList(),
+                  labels: scaleScores.map((e) => e.label).toList(),
+                  size: 320,
+                ),
+              ),
+            ),
+          const SizedBox(height: 8),
+          _radarLegend(),
+        ],
+      ),
+    );
+  }
+
+  Widget _radarLegend() {
+    return Wrap(
+      spacing: 10,
+      runSpacing: 8,
+      children: [
+        _legendChip("1–3", Colors.red.shade300),
+        _legendChip("4–6", accent),
+        _legendChip("7–10", Colors.green.shade600),
+      ],
+    );
+  }
+
+  Widget _legendChip(String label, Color color) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.12),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: color.withOpacity(0.4)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 9,
+            height: 9,
+            decoration: BoxDecoration(
+              color: color,
+              shape: BoxShape.circle,
+            ),
+          ),
+          const SizedBox(width: 6),
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w700,
+              color: color,
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -189,11 +276,11 @@ class AssessmentResultsPage extends StatelessWidget {
             "The Heart Score reflects whether there may still be meaningful options to pursue for improving this stage of your pet’s life.",
             style: TextStyle(
               fontSize: 14,
-              height: 1.4,
+              height: 1.45,
               color: muted,
             ),
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 14),
           Row(
             children: [
               Expanded(
@@ -203,7 +290,7 @@ class AssessmentResultsPage extends StatelessWidget {
                   selectedColor: Colors.red.shade400,
                 ),
               ),
-              const SizedBox(width: 8),
+              const SizedBox(width: 10),
               Expanded(
                 child: _rangePill(
                   label: "3–5",
@@ -211,7 +298,7 @@ class AssessmentResultsPage extends StatelessWidget {
                   selectedColor: accent,
                 ),
               ),
-              const SizedBox(width: 8),
+              const SizedBox(width: 10),
               Expanded(
                 child: _rangePill(
                   label: "6–10",
@@ -241,11 +328,11 @@ class AssessmentResultsPage extends StatelessWidget {
             "The Condition Score reflects your pet’s current day-to-day quality of life based on the concerns highlighted in your responses.",
             style: TextStyle(
               fontSize: 14,
-              height: 1.4,
+              height: 1.45,
               color: muted,
             ),
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 14),
           Row(
             children: [
               Expanded(
@@ -255,17 +342,18 @@ class AssessmentResultsPage extends StatelessWidget {
                   selectedColor: Colors.red.shade400,
                 ),
               ),
-              const SizedBox(width: 8),
+              const SizedBox(width: 10),
               Expanded(
                 child: _rangePill(
                   label: "30–60",
-                  selected: conditionScore >= 30 &&
+                  selected:
+                      conditionScore >= 30 &&
                       conditionScore <= 60 &&
                       !challenged,
                   selectedColor: accent,
                 ),
               ),
-              const SizedBox(width: 8),
+              const SizedBox(width: 10),
               Expanded(
                 child: _rangePill(
                   label: ">60",
@@ -295,25 +383,34 @@ class AssessmentResultsPage extends StatelessWidget {
     required Color selectedColor,
     bool fullWidth = false,
   }) {
-    return Container(
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 180),
       width: fullWidth ? double.infinity : null,
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      height: 40,
+      padding: const EdgeInsets.symmetric(horizontal: 14),
       decoration: BoxDecoration(
-        color: selected ? selectedColor.withValues() : Colors.grey.shade100,
-        borderRadius: BorderRadius.circular(14),
+        color: selected ? selectedColor : Colors.grey.shade100,
+        borderRadius: BorderRadius.circular(20),
         border: Border.all(
           color: selected ? selectedColor : Colors.grey.shade300,
-          width: selected ? 1.5 : 1,
+          width: 1.2,
         ),
       ),
-      child: Text(
-        label,
-        textAlign: TextAlign.center,
-        style: TextStyle(
-          fontSize: 14,
-          fontWeight: FontWeight.w700,
-          color: selected ? selectedColor : muted,
-        ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Flexible(
+            child: Text(
+              label,
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w700,
+                color: selected ? Colors.white : muted,
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -380,7 +477,9 @@ class AssessmentResultsPage extends StatelessWidget {
 
   String _conditionScoreShortLabel(int score) {
     final challenged =
-        score >= 30 && score <= 90 && significantlyChallenged;
+        score >= 30 &&
+        score <= 90 &&
+        significantlyChallenged;
 
     if (score < 30) return "Range <30";
     if (challenged) return "Significantly challenged";
@@ -409,7 +508,9 @@ class AssessmentResultsPage extends StatelessWidget {
 
   String _conditionScoreRangeTitle(int score) {
     final challenged =
-        score >= 30 && score <= 90 && significantlyChallenged;
+        score >= 30 &&
+        score <= 90 &&
+        significantlyChallenged;
 
     if (score < 30) return "Condition Score Range: <30";
     if (challenged) {
@@ -421,7 +522,9 @@ class AssessmentResultsPage extends StatelessWidget {
 
   String _conditionScoreRangeText(int score) {
     final challenged =
-        score >= 30 && score <= 90 && significantlyChallenged;
+        score >= 30 &&
+        score <= 90 &&
+        significantlyChallenged;
 
     if (score < 30) {
       return "We are never ready to say goodbye and we never want to rob them of those good days. It's important, however, that we not hold on so tightly that we cross the threshold of distress with them.\n\n"

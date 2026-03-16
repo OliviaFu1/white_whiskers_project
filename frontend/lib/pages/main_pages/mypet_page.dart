@@ -102,13 +102,13 @@ class _MypetPageState extends State<MypetPage> {
         child: isLoading
             ? const Center(child: CircularProgressIndicator())
             : errorText != null
-                ? Center(
-                    child: Text(
-                      errorText!,
-                      style: const TextStyle(color: Colors.red),
-                    ),
-                  )
-                : _content(),
+            ? Center(
+                child: Text(
+                  errorText!,
+                  style: const TextStyle(color: Colors.red),
+                ),
+              )
+            : _content(),
       ),
     );
   }
@@ -262,6 +262,49 @@ class _MypetPageState extends State<MypetPage> {
     );
   }
 
+  int _readScore(dynamic value) {
+    if (value is int) return value;
+    if (value is num) return value.toInt();
+    if (value is String) return int.tryParse(value) ?? 0;
+    return 0;
+  }
+
+  Map<String, dynamic>? _assessmentAnswers(Map<String, dynamic>? assessment) {
+    if (assessment == null) return null;
+
+    final raw =
+        assessment["answers"];
+    if (raw is Map<String, dynamic>) return raw;
+
+    return null;
+  }
+
+  List<AssessmentScaleScore> _buildScaleScores(
+    Map<String, dynamic>? assessment,
+  ) {
+    final answers = _assessmentAnswers(assessment);
+    if (answers == null) return const [];
+
+    final fields = <MapEntry<String, String>>[
+      const MapEntry("Appetite", "appetite_score"),
+      const MapEntry("Hydration", "hydration_score"),
+      const MapEntry("Cleanliness", "cleanliness_score"),
+      const MapEntry("Mobility", "mobility_score"),
+      const MapEntry("Physical Comfort", "physical_score"),
+      const MapEntry("State of Mind", "state_of_mind_score"),
+      const MapEntry("Owner State", "owner_state_score"),
+    ];
+
+    return fields
+        .map(
+          (e) => AssessmentScaleScore(
+            label: e.key,
+            score: _readScore(answers[e.value]),
+          ),
+        )
+        .toList();
+  }
+
   Widget _historyCard(Map<String, dynamic>? pet) {
     final heartScore = latestAssessment?["heart_score"];
     final conditionScore = latestAssessment?["condition_score"];
@@ -269,6 +312,7 @@ class _MypetPageState extends State<MypetPage> {
     final assessedAtText = _formatAssessmentDate(assessedAtRaw);
     final petName = (pet?["name"] ?? "").toString().trim();
     final hasAssessment = latestAssessment != null;
+    final scaleScores = _buildScaleScores(latestAssessment);
 
     return GestureDetector(
       onTap: !hasAssessment
@@ -281,6 +325,7 @@ class _MypetPageState extends State<MypetPage> {
                     heartScore: heartScore,
                     conditionScore: conditionScore,
                     significantlyChallenged: _hasSignificantlyChallengedFlag(),
+                    scaleScores: scaleScores,
                     onDone: () {
                       Navigator.of(context).pop();
                     },
