@@ -23,7 +23,6 @@ class _AssessmentPageState extends State<AssessmentPage> {
   int _currentPage = 0;
 
   bool _isSubmitting = false;
-  String? _submitError;
 
   final Map<String, dynamic> _answers = {
     "favorite_pet_things": <String>["", "", ""],
@@ -410,13 +409,10 @@ class _AssessmentPageState extends State<AssessmentPage> {
 
     setState(() {
       _isSubmitting = true;
-      _submitError = null;
     });
 
     try {
-      final saved = await AssessmentApi.createAssessment(
-        body: _buildAssessmentPayload(),
-      );
+      await AssessmentApi.createAssessment(body: _buildAssessmentPayload());
 
       if (!mounted) return;
 
@@ -430,10 +426,6 @@ class _AssessmentPageState extends State<AssessmentPage> {
       );
     } catch (e) {
       if (!mounted) return;
-
-      setState(() {
-        _submitError = e.toString();
-      });
 
       ScaffoldMessenger.of(
         context,

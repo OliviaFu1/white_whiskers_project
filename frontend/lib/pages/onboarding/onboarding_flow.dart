@@ -204,7 +204,8 @@ class _OnboardingFlowState extends State<OnboardingFlow> {
           onBack: null,
           canNext: _ownerValid,
           onNext: _saveNameAndNext,
-          helperError: _nameSaveError ??
+          helperError:
+              _nameSaveError ??
               ((_ownerTouched && !_ownerValid) ? "Name is required" : null),
           bg: bg,
           titleColor: titleColor,
@@ -226,7 +227,9 @@ class _OnboardingFlowState extends State<OnboardingFlow> {
           onBack: _back,
           canNext: _petValid,
           onNext: _next,
-          helperError: (_petTouched && !_petValid) ? "Pet name is required" : null,
+          helperError: (_petTouched && !_petValid)
+              ? "Pet name is required"
+              : null,
           bg: bg,
           titleColor: titleColor,
           accent: accent,
@@ -246,8 +249,9 @@ class _OnboardingFlowState extends State<OnboardingFlow> {
           onBack: _back,
           canNext: _speciesValid,
           onNext: _next,
-          helperError:
-              (_speciesTouched && !_speciesValid) ? "Species is required" : null,
+          helperError: (_speciesTouched && !_speciesValid)
+              ? "Species is required"
+              : null,
           bg: bg,
           titleColor: titleColor,
           accent: accent,
@@ -305,7 +309,9 @@ class _OnboardingFlowState extends State<OnboardingFlow> {
           onBack: _back,
           canNext: _breedValid,
           onNext: _next,
-          helperError: (_breedTouched && !_breedValid) ? "Breed is required" : null,
+          helperError: (_breedTouched && !_breedValid)
+              ? "Breed is required"
+              : null,
           bg: bg,
           titleColor: titleColor,
           accent: accent,
@@ -364,7 +370,7 @@ class _OnboardingFlowState extends State<OnboardingFlow> {
         // 6) final page
         OnboardingStepScaffold(
           title: "You’re All Set!\nReady to take your\nfirst assessment?",
-          showBack: true,
+          showBack: false,
           onBack: _back,
           canNext: false,
           onNext: null,
@@ -374,31 +380,45 @@ class _OnboardingFlowState extends State<OnboardingFlow> {
           accent: accent,
           muted: muted,
           field: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              GestureDetector(
-                onTap: _savingFinal
-                    ? null
-                    : () => _finalizeAndGo(goToAssessment: true),
-                child: Text(
-                  _savingFinal ? "saving..." : "start first assessment",
-                  style: const TextStyle(
-                    decoration: TextDecoration.underline,
-                    fontSize: 14,
-                    color: muted,
+              SizedBox(
+                height: 48,
+                child: ElevatedButton(
+                  onPressed: _savingFinal
+                      ? null
+                      : () => _finalizeAndGo(goToAssessment: true),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: accent,
+                    foregroundColor: Colors.white,
+                    elevation: 0,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                  child: Text(
+                    _savingFinal ? "Saving..." : "Start First Assessment",
+                    style: const TextStyle(fontWeight: FontWeight.w600),
                   ),
                 ),
               ),
-              const SizedBox(height: 14),
-              GestureDetector(
-                onTap: _savingFinal
-                    ? null
-                    : () => _finalizeAndGo(goToAssessment: false),
-                child: Text(
-                  _savingFinal ? "saving..." : "Homepage",
-                  style: const TextStyle(
-                    decoration: TextDecoration.underline,
-                    fontSize: 12,
-                    color: muted,
+              const SizedBox(height: 12),
+              SizedBox(
+                height: 48,
+                child: OutlinedButton(
+                  onPressed: _savingFinal
+                      ? null
+                      : () => _finalizeAndGo(goToAssessment: false),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: muted,
+                    side: BorderSide(color: muted.withValues()),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                  child: Text(
+                    _savingFinal ? "Saving..." : "Go to Homepage",
+                    style: const TextStyle(fontWeight: FontWeight.w600),
                   ),
                 ),
               ),
@@ -445,12 +465,14 @@ class SexAndSpayField extends StatelessWidget {
           items: const [
             DropdownMenuItem(value: "male", child: Text("Male")),
             DropdownMenuItem(value: "female", child: Text("Female")),
-            DropdownMenuItem(value: "unknown", child: Text("Prefer not to say")),
+            DropdownMenuItem(
+              value: "unknown",
+              child: Text("Prefer not to say"),
+            ),
           ],
         ),
         const SizedBox(height: 18),
-        Text("Spayed / Neutered",
-            style: TextStyle(color: muted, fontSize: 12)),
+        Text("Spayed / Neutered", style: TextStyle(color: muted, fontSize: 12)),
         const SizedBox(height: 8),
         Wrap(
           spacing: 10,
