@@ -1,9 +1,13 @@
 import 'package:flutter/material.dart';
+import 'package:frontend/models/pet.dart';
+import 'package:frontend/models/user.dart';
 import 'package:frontend/pages/app_shell.dart';
+import 'package:frontend/pages/repositories/notification_repository.dart';
 import 'package:frontend/services/notifications_service.dart';
 import 'package:frontend/services/pet_store.dart';
 import 'package:frontend/services/pets_api.dart';
 import 'package:frontend/state/auth_state.dart';
+import 'package:frontend/state/notifiers.dart';
 import '../../services/auth_api.dart';
 import '../../services/token_store.dart';
 import '../onboarding/onboarding_flow.dart';
@@ -25,6 +29,7 @@ class _PostLoginGateState extends State<PostLoginGate> {
   @override
   void initState() {
     super.initState();
+    notificationRepository ??= ApiNotificationRepository();
     refresher.start();
     AuthState.instance.addListener(_authListener);
     _loadMe();
@@ -49,10 +54,20 @@ class _PostLoginGateState extends State<PostLoginGate> {
       if (access == null) throw "No access token found.";
 
       final data = await AuthApi.me(accessToken: access);
+      userNotifier.value = User.fromJson(data);
 
-      final pets = await PetsApi.listPets();
-      if (pets.isNotEmpty) {
-        await PetStore.setCurrentPetId(pets.first["id"] as int);
+      final rawPets = await PetsApi.listPets();
+      if (rawPets.isNotEmpty) {
+        await PetStore.setCurrentPetId(rawPets.first["id"] as int);
+        final pets = rawPets
+            .map((p) => Pet(
+                  id: p["id"].toString(),
+                  name: (p["name"] ?? "Pet") as String,
+                  imageUrl: 'assets/images/test_pet.jpg',
+                ))
+            .toList();
+        petsNotifier.value = pets;
+        selectedPetNotifier.value = pets.first;
       }
 
       setState(() {

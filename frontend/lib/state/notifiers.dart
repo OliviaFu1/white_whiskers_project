@@ -1,8 +1,11 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:frontend/models/app_notification.dart';
 import 'package:frontend/models/pet.dart';
+import 'package:frontend/models/user.dart';
 import 'package:frontend/pages/repositories/notification_repository.dart';
 import 'package:frontend/pages/repositories/pet_repository.dart';
+import 'package:frontend/services/api_client.dart';
 
 // final Pet _defaultPet = Pet(
 //   id: '0',
@@ -20,6 +23,16 @@ Future<void> loadPets() async {
   }
 }
 
+Future<void> loadUser() async {
+  try {
+    final res = await ApiClient.get("/api/accounts/me/");
+    if (res.statusCode >= 200 && res.statusCode < 300) {
+      final data = jsonDecode(res.body) as Map<String, dynamic>;
+      userNotifier.value = User.fromJson(data);
+    }
+  } catch (_) {}
+}
+
 Future<void> loadNotifications() async {
   if (notificationRepository == null) return;
 
@@ -35,6 +48,7 @@ final selectedTabNotifier = ValueNotifier<AppTab>(AppTab.calendar);
 final notificationsNotifier = ValueNotifier<List<AppNotification>>([]);
 NotificationRepository? notificationRepository;
 
+final userNotifier = ValueNotifier<User?>(null);
 final petsNotifier = ValueNotifier<List<Pet>>([]);
 final ValueNotifier<Pet?> selectedPetNotifier = ValueNotifier<Pet?>(null);
 final PetRepository petRepository = FakePetRepository();

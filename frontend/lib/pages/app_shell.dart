@@ -4,13 +4,13 @@ import 'package:frontend/state/auth_state.dart';
 import 'package:frontend/state/notifiers.dart';
 import 'package:frontend/models/app_notification.dart';
 import 'package:frontend/models/pet.dart';
+import 'package:frontend/models/user.dart';
+import 'package:frontend/widgets/user_avatar.dart';
 import 'package:frontend/pages/main_pages/calendar_page.dart';
 import 'package:frontend/pages/main_pages/journal_page.dart';
 import 'package:frontend/pages/main_pages/mypet_page.dart';
 import 'package:frontend/pages/notifications_page.dart';
-import 'package:frontend/pages/profile_page.dart';
-
-// List<Widget> pages = [CalendarPage(), JournalPage(), MypetPage()];
+import 'package:frontend/pages/profile/profile_page.dart';
 
 class AppShell extends StatefulWidget {
   const AppShell({super.key});
@@ -86,28 +86,46 @@ class _ProfileSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return InkWell(
-      onTap: () {
-        Navigator.push(
-          context,
-          MaterialPageRoute(builder: (context) => ProfilePage()),
+    return ValueListenableBuilder<User?>(
+      valueListenable: userNotifier,
+      builder: (context, user, child) {
+        final name = user?.name ?? '';
+        return GestureDetector(
+          onTap: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (context) => ProfilePage()),
+            );
+          },
+          child: Container(
+            margin: const EdgeInsets.only(left: 12),
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+            decoration: BoxDecoration(
+              color: const Color(0xFFEDE0D4),
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                UserAvatar(user: user, radius: 22),
+                const SizedBox(width: 6),
+                ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 80),
+                  child: Text(
+                    name,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w500,
+                      color: Colors.black87,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
         );
       },
-      borderRadius: BorderRadius.circular(20),
-      child: Row(
-        children: const [
-          SizedBox(width: 6),
-          CircleAvatar(
-            radius: 20,
-            backgroundImage: AssetImage('assets/images/test_user.jpg'),
-          ),
-          SizedBox(width: 8),
-          Text(
-            'cauliflower',
-            style: TextStyle(color: Colors.black, fontSize: 16),
-          ),
-        ],
-      ),
     );
   }
 }
@@ -141,6 +159,7 @@ class _NotificationsButton extends StatelessWidget {
                 );
               },
               icon: const Icon(Icons.notifications),
+              tooltip: "notifications",
             ),
 
             if (unreadCount > 0)
@@ -187,12 +206,6 @@ class PetsDropdown extends StatefulWidget {
 }
 
 class _PetsDropdownState extends State<PetsDropdown> {
-  // final List<Pet> pets = [
-  //   Pet(id: '0', name: 'Sausage', imageUrl: 'assets/images/test_pet.jpg'),
-  //   Pet(id: '1', name: 'Pausage', imageUrl: 'assets/images/test_pet.jpg'),
-  //   Pet(id: '2', name: 'Mortage', imageUrl: 'assets/images/test_pet.jpg'),
-  // ]; // temporary list
-
   @override
   Widget build(BuildContext context) {
     return ValueListenableBuilder<List<Pet>>(
@@ -231,13 +244,33 @@ class _SelectedPetButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Flexible(child: Text(pet.name, overflow: TextOverflow.ellipsis)),
-        const SizedBox(width: 5),
-        _PetAvatar(imageUrl: pet.imageUrl, radius: 20),
-      ],
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: const Color(0xFFEDE0D4),
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _PetAvatar(imageUrl: pet.imageUrl, radius: 12),
+          const SizedBox(width: 6),
+          ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 72),
+            child: Text(
+              pet.name,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w500,
+                color: Colors.black87,
+              ),
+            ),
+          ),
+          const SizedBox(width: 2),
+          const Icon(Icons.expand_more, size: 15, color: Colors.black54),
+        ],
+      ),
     );
   }
 }

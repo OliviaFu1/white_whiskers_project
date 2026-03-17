@@ -10,7 +10,8 @@ class User(AbstractUser):
     email = models.EmailField(unique=True)
 
     name = models.CharField(max_length=150, blank=True)
-    photo_url = models.URLField(blank=True)
+    photo = models.ImageField(upload_to='profile_photos/', blank=True, null=True)
+    location = models.CharField(max_length=150, blank=True)
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

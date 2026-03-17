@@ -1,7 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
+import 'package:frontend/models/pet.dart';
+import 'package:frontend/models/user.dart';
 import 'package:frontend/pages/app_shell.dart';
 import 'package:frontend/pages/assessment/assessment_page.dart';
+import 'package:frontend/services/pet_store.dart';
+import 'package:frontend/state/notifiers.dart';
 import 'onboarding_widget.dart';
 import '../../services/auth_api.dart';
 import '../../services/pets_api.dart';
@@ -97,7 +101,8 @@ class _OnboardingFlowState extends State<OnboardingFlow> {
       final access = await TokenStore.readAccess();
       if (access == null) throw "Session expired. Please log in again.";
 
-      await AuthApi.updateMe(accessToken: access, name: ownerName.text.trim());
+      final data = await AuthApi.updateMe(accessToken: access, name: ownerName.text.trim());
+      userNotifier.value = User.fromJson(data);
 
       if (!mounted) return;
       setState(() => _savingName = false);
@@ -135,6 +140,27 @@ class _OnboardingFlowState extends State<OnboardingFlow> {
       };
 
       await PetsApi.createPet(body: petBody);
+
+      // Reload user and pets into notifiers so AppShell has fresh data.
+      final access2 = await TokenStore.readAccess();
+      if (access2 != null) {
+        final userData = await AuthApi.me(accessToken: access2);
+        userNotifier.value = User.fromJson(userData);
+
+        final rawPets = await PetsApi.listPets();
+        if (rawPets.isNotEmpty) {
+          await PetStore.setCurrentPetId(rawPets.first["id"] as int);
+          final pets = rawPets
+              .map((p) => Pet(
+                    id: p["id"].toString(),
+                    name: (p["name"] ?? "Pet") as String,
+                    imageUrl: 'assets/images/test_pet.jpg',
+                  ))
+              .toList();
+          petsNotifier.value = pets;
+          selectedPetNotifier.value = pets.first;
+        }
+      }
 
       if (!mounted) return;
 

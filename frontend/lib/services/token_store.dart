@@ -20,7 +20,12 @@ class TokenStore {
   static Future<String?> readRefresh() => _storage.read(key: _kRefresh);
 
   static Future<void> clear() async {
-    await _storage.delete(key: _kAccess);
-    await _storage.delete(key: _kRefresh);
+    try {
+      await _storage.deleteAll();
+    } catch (_) {
+      // Windows file-locking fallback: overwrite with null
+      await _storage.write(key: _kAccess, value: null);
+      await _storage.write(key: _kRefresh, value: null);
+    }
   }
 }
