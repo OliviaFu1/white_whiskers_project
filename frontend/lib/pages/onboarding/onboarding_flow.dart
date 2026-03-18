@@ -10,7 +10,6 @@ import 'onboarding_widget.dart';
 import '../../services/auth_api.dart';
 import '../../services/pets_api.dart';
 import '../../services/token_store.dart';
-import '../../services/user_store.dart';
 
 enum AgeInputMode { age, birthdate }
 
@@ -104,7 +103,6 @@ class _OnboardingFlowState extends State<OnboardingFlow> {
 
       final data = await AuthApi.updateMe(accessToken: access, name: ownerName.text.trim());
       userNotifier.value = User.fromJson(data);
-      await UserStore.setOwnerName(ownerName.text.trim());
 
       if (!mounted) return;
       setState(() => _savingName = false);

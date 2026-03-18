@@ -3,7 +3,7 @@ import '../../services/pets_api.dart';
 import '../../services/pet_store.dart';
 import '../../services/token_store.dart';
 import '../assessment/assessment_page.dart';
-import '../../services/user_store.dart';
+import 'package:frontend/state/notifiers.dart';
 import '../../services/assessment_api.dart';
 import '../assessment/assessment_results.dart';
 
@@ -513,7 +513,7 @@ class _MypetPageState extends State<MypetPage> {
   Future<void> _startAssessmentForPet(Map<String, dynamic> pet) async {
     final petId = pet["id"] as int;
     final petName = (pet["name"] ?? "").toString().trim();
-    final ownerName = await UserStore.getOwnerName();
+    final ownerName = userNotifier.value?.name;
 
     if (!mounted) return;
 
