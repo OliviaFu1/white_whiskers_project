@@ -4,6 +4,7 @@ import 'package:frontend/main.dart';
 import 'package:frontend/pages/auth/auth_gate.dart';
 import 'package:frontend/state/auth_state.dart';
 import 'package:http/http.dart' as http;
+import 'package:http_parser/http_parser.dart';
 
 import '../config.dart';
 import 'token_store.dart';
@@ -91,6 +92,44 @@ class ApiClient {
       headers: _headers(newAccess),
       body: jsonBody == null ? null : jsonEncode(jsonBody),
     );
+  }
+
+  /// Multipart photo upload with refresh+retry
+  static Future<http.Response> uploadPhoto(String filePath, {String mimeType = 'image/jpeg'}) async {
+    final access = await TokenStore.readAccess();
+    if (access == null) throw "No access token.";
+
+    final res = await _sendPhotoUpload(filePath, mimeType, access);
+    if (res.statusCode != 401) return res;
+
+    final newAccess = await _refreshAccessLocked();
+    return _sendPhotoUpload(filePath, mimeType, newAccess);
+  }
+
+  /// DELETE photo with refresh+retry
+  static Future<http.Response> deletePhoto() async {
+    final access = await TokenStore.readAccess();
+    if (access == null) throw "No access token.";
+
+    final uri = _u('/api/accounts/me/photo/');
+    final res = await http.delete(uri, headers: _headers(access));
+    if (res.statusCode != 401) return res;
+
+    final newAccess = await _refreshAccessLocked();
+    return http.delete(uri, headers: _headers(newAccess));
+  }
+
+  static Future<http.Response> _sendPhotoUpload(String filePath, String mimeType, String token) async {
+    final uri = _u('/api/accounts/me/photo/');
+    final request = http.MultipartRequest('PATCH', uri)
+      ..headers['Authorization'] = 'Bearer $token'
+      ..files.add(await http.MultipartFile.fromPath(
+        'photo',
+        filePath,
+        contentType: MediaType.parse(mimeType),
+      ));
+    final streamed = await request.send();
+    return http.Response.fromStream(streamed);
   }
 
   /// Ensures only one refresh runs at a time
