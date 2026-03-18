@@ -10,6 +10,7 @@ import 'onboarding_widget.dart';
 import '../../services/auth_api.dart';
 import '../../services/pets_api.dart';
 import '../../services/token_store.dart';
+import '../../services/user_store.dart';
 
 enum AgeInputMode { age, birthdate }
 
@@ -103,6 +104,7 @@ class _OnboardingFlowState extends State<OnboardingFlow> {
 
       final data = await AuthApi.updateMe(accessToken: access, name: ownerName.text.trim());
       userNotifier.value = User.fromJson(data);
+      await UserStore.setOwnerName(ownerName.text.trim());
 
       if (!mounted) return;
       setState(() => _savingName = false);
@@ -116,7 +118,7 @@ class _OnboardingFlowState extends State<OnboardingFlow> {
     }
   }
 
-  Future<void> _finalizeAndGo(Widget page) async {
+  Future<void> _finalizeAndGo({required bool goToAssessment}) async {
     if (_savingFinal) return;
 
     setState(() {
@@ -125,9 +127,6 @@ class _OnboardingFlowState extends State<OnboardingFlow> {
     });
 
     try {
-      final access = await TokenStore.readAccess();
-      if (access == null) throw "No access token found.";
-
       final petBody = <String, dynamic>{
         "name": petName.text.trim(),
         "species": species,
@@ -139,7 +138,12 @@ class _OnboardingFlowState extends State<OnboardingFlow> {
           "birthdate": birthDate!.toIso8601String().split('T').first,
       };
 
-      await PetsApi.createPet(body: petBody);
+      final createdPet = await PetsApi.createPet(body: petBody);
+      final petId = createdPet["id"];
+
+      if (petId == null) {
+        throw "Pet created but no pet id was returned.";
+      }
 
       // Reload user and pets into notifiers so AppShell has fresh data.
       final access2 = await TokenStore.readAccess();
@@ -164,8 +168,16 @@ class _OnboardingFlowState extends State<OnboardingFlow> {
 
       if (!mounted) return;
 
+      final Widget nextPage = goToAssessment
+          ? AssessmentPage(
+              petId: petId as int,
+              petName: petName.text.trim(),
+              ownerName: ownerName.text.trim(),
+            )
+          : const AppShell();
+
       Navigator.of(context).pushAndRemoveUntil(
-        MaterialPageRoute(builder: (_) => page),
+        MaterialPageRoute(builder: (_) => nextPage),
         (route) => false,
       );
     } catch (e) {
@@ -218,7 +230,8 @@ class _OnboardingFlowState extends State<OnboardingFlow> {
           onBack: null,
           canNext: _ownerValid,
           onNext: _saveNameAndNext,
-          helperError: _nameSaveError ??
+          helperError:
+              _nameSaveError ??
               ((_ownerTouched && !_ownerValid) ? "Name is required" : null),
           bg: bg,
           titleColor: titleColor,
@@ -240,7 +253,9 @@ class _OnboardingFlowState extends State<OnboardingFlow> {
           onBack: _back,
           canNext: _petValid,
           onNext: _next,
-          helperError: (_petTouched && !_petValid) ? "Pet name is required" : null,
+          helperError: (_petTouched && !_petValid)
+              ? "Pet name is required"
+              : null,
           bg: bg,
           titleColor: titleColor,
           accent: accent,
@@ -260,8 +275,9 @@ class _OnboardingFlowState extends State<OnboardingFlow> {
           onBack: _back,
           canNext: _speciesValid,
           onNext: _next,
-          helperError:
-              (_speciesTouched && !_speciesValid) ? "Species is required" : null,
+          helperError: (_speciesTouched && !_speciesValid)
+              ? "Species is required"
+              : null,
           bg: bg,
           titleColor: titleColor,
           accent: accent,
@@ -319,7 +335,9 @@ class _OnboardingFlowState extends State<OnboardingFlow> {
           onBack: _back,
           canNext: _breedValid,
           onNext: _next,
-          helperError: (_breedTouched && !_breedValid) ? "Breed is required" : null,
+          helperError: (_breedTouched && !_breedValid)
+              ? "Breed is required"
+              : null,
           bg: bg,
           titleColor: titleColor,
           accent: accent,
@@ -378,7 +396,7 @@ class _OnboardingFlowState extends State<OnboardingFlow> {
         // 6) final page
         OnboardingStepScaffold(
           title: "You’re All Set!\nReady to take your\nfirst assessment?",
-          showBack: true,
+          showBack: false,
           onBack: _back,
           canNext: false,
           onNext: null,
@@ -388,31 +406,45 @@ class _OnboardingFlowState extends State<OnboardingFlow> {
           accent: accent,
           muted: muted,
           field: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              GestureDetector(
-                onTap: _savingFinal
-                    ? null
-                    : () => _finalizeAndGo(const AssessmentPage()),
-                child: Text(
-                  _savingFinal ? "saving..." : "start first assessment",
-                  style: const TextStyle(
-                    decoration: TextDecoration.underline,
-                    fontSize: 14,
-                    color: muted,
+              SizedBox(
+                height: 48,
+                child: ElevatedButton(
+                  onPressed: _savingFinal
+                      ? null
+                      : () => _finalizeAndGo(goToAssessment: true),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: accent,
+                    foregroundColor: Colors.white,
+                    elevation: 0,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                  child: Text(
+                    _savingFinal ? "Saving..." : "Start First Assessment",
+                    style: const TextStyle(fontWeight: FontWeight.w600),
                   ),
                 ),
               ),
-              const SizedBox(height: 14),
-              GestureDetector(
-                onTap: _savingFinal
-                    ? null
-                    : () => _finalizeAndGo(const AppShell()),
-                child: Text(
-                  _savingFinal ? "saving..." : "Homepage",
-                  style: const TextStyle(
-                    decoration: TextDecoration.underline,
-                    fontSize: 12,
-                    color: muted,
+              const SizedBox(height: 12),
+              SizedBox(
+                height: 48,
+                child: OutlinedButton(
+                  onPressed: _savingFinal
+                      ? null
+                      : () => _finalizeAndGo(goToAssessment: false),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: muted,
+                    side: BorderSide(color: muted.withValues()),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                  child: Text(
+                    _savingFinal ? "Saving..." : "Go to Homepage",
+                    style: const TextStyle(fontWeight: FontWeight.w600),
                   ),
                 ),
               ),
@@ -459,12 +491,14 @@ class SexAndSpayField extends StatelessWidget {
           items: const [
             DropdownMenuItem(value: "male", child: Text("Male")),
             DropdownMenuItem(value: "female", child: Text("Female")),
-            DropdownMenuItem(value: "unknown", child: Text("Prefer not to say")),
+            DropdownMenuItem(
+              value: "unknown",
+              child: Text("Prefer not to say"),
+            ),
           ],
         ),
         const SizedBox(height: 18),
-        Text("Spayed / Neutered",
-            style: TextStyle(color: muted, fontSize: 12)),
+        Text("Spayed / Neutered", style: TextStyle(color: muted, fontSize: 12)),
         const SizedBox(height: 8),
         Wrap(
           spacing: 10,

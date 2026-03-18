@@ -171,4 +171,20 @@ class ApiClient {
       throw "Session expired. Please log in again.";
     }
   }
+
+  static Future<http.Response> delete(
+    String path, {
+    Map<String, String>? queryParameters,
+  }) async {
+    final access = await TokenStore.readAccess();
+    if (access == null) throw "No access token.";
+
+    final uri = _u(path).replace(queryParameters: queryParameters);
+    final res = await http.delete(uri, headers: _headers(access));
+
+    if (res.statusCode != 401) return res;
+
+    final newAccess = await _refreshAccessLocked();
+    return await http.delete(uri, headers: _headers(newAccess));
+  }
 }
