@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:frontend/main.dart';
 import 'package:frontend/models/user.dart';
 import 'package:frontend/pages/auth/auth_gate.dart';
+import 'package:frontend/pages/profile/privacy_page.dart';
 import 'package:frontend/services/api_client.dart';
 import 'package:frontend/services/token_store.dart';
 import 'package:frontend/state/auth_state.dart';
@@ -211,7 +212,10 @@ class _SettingsSection extends StatelessWidget {
                 leading: const Icon(Icons.lock_outline),
                 title: const Text('Privacy'),
                 trailing: const Icon(Icons.chevron_right),
-                onTap: () {},
+                onTap: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const PrivacyPage()),
+                ),
               ),
               const Divider(height: 1),
               ListTile(
@@ -292,6 +296,24 @@ class _EditProfileSheetState extends State<_EditProfileSheet> {
     _lastName.dispose();
     _location.dispose();
     super.dispose();
+  }
+
+  Future<void> _removePhoto() async {
+    setState(() => _uploadingPhoto = true);
+    try {
+      final res = await ApiClient.deletePhoto();
+      if (res.statusCode >= 200 && res.statusCode < 300) {
+        final data = jsonDecode(res.body) as Map<String, dynamic>;
+        userNotifier.value = User.fromJson(data);
+        setState(() => _photoUrl = '');
+      } else {
+        setState(() => _error = 'Failed to remove photo (${res.statusCode})');
+      }
+    } catch (e) {
+      if (mounted) setState(() => _error = e.toString());
+    } finally {
+      if (mounted) setState(() => _uploadingPhoto = false);
+    }
   }
 
   Future<void> _pickPhoto() async {
@@ -379,6 +401,14 @@ class _EditProfileSheetState extends State<_EditProfileSheet> {
             uploading: _uploadingPhoto,
             onTap: _uploadingPhoto ? null : _pickPhoto,
           ),
+          if (_photoUrl.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            TextButton.icon(
+              onPressed: _uploadingPhoto ? null : _removePhoto,
+              icon: const Icon(Icons.delete_outline, size: 16, color: Colors.red),
+              label: const Text('Remove photo', style: TextStyle(color: Colors.red)),
+            ),
+          ],
           const SizedBox(height: 24),
           _NameFields(firstName: _firstName, lastName: _lastName),
           const SizedBox(height: 16),

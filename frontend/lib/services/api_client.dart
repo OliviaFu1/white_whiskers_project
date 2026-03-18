@@ -106,6 +106,19 @@ class ApiClient {
     return _sendPhotoUpload(filePath, mimeType, newAccess);
   }
 
+  /// DELETE photo with refresh+retry
+  static Future<http.Response> deletePhoto() async {
+    final access = await TokenStore.readAccess();
+    if (access == null) throw "No access token.";
+
+    final uri = _u('/api/accounts/me/photo/');
+    final res = await http.delete(uri, headers: _headers(access));
+    if (res.statusCode != 401) return res;
+
+    final newAccess = await _refreshAccessLocked();
+    return http.delete(uri, headers: _headers(newAccess));
+  }
+
   static Future<http.Response> _sendPhotoUpload(String filePath, String mimeType, String token) async {
     final uri = _u('/api/accounts/me/photo/');
     final request = http.MultipartRequest('PATCH', uri)

@@ -64,3 +64,12 @@ class PhotoUploadView(generics.UpdateAPIView):
 
         serializer = UserPublicSerializer(user, context={'request': request})
         return Response(serializer.data)
+
+    def delete(self, request, *args, **kwargs):
+        user = self.get_object()
+        if user.photo:
+            user.photo.delete(save=False)
+            user.photo = None
+            user.save()
+        serializer = UserPublicSerializer(user, context={'request': request})
+        return Response(serializer.data)
