@@ -5,6 +5,7 @@ import 'package:frontend/pages/main_pages/daily_checkin_page.dart';
 import 'package:frontend/pages/main_pages/day_details_page.dart';
 import 'package:frontend/services/calendar_api.dart';
 import 'package:frontend/services/pet_store.dart';
+import 'package:frontend/state/notifiers.dart';
 
 enum DayStatus { good, bad, neutral, none }
 
@@ -32,6 +33,17 @@ class _CalendarPageState extends State<CalendarPage> {
   @override
   void initState() {
     super.initState();
+    _loadAllCheckins();
+    selectedPetNotifier.addListener(_onPetChanged);
+  }
+
+  @override
+  void dispose() {
+    selectedPetNotifier.removeListener(_onPetChanged);
+    super.dispose();
+  }
+
+  void _onPetChanged() {
     _loadAllCheckins();
   }
 
@@ -296,6 +308,8 @@ class _CalendarPageState extends State<CalendarPage> {
   }
 
   Future<int> _getCurrentPetId() async {
+    final pet = selectedPetNotifier.value;
+    if (pet != null) return pet.id;
     final petId = await PetStore.getCurrentPetId();
     if (petId == null) throw "No pet selected.";
     return petId;

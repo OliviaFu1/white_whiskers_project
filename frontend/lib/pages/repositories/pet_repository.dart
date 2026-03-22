@@ -1,19 +1,22 @@
 import 'package:frontend/models/pet.dart';
+import 'package:frontend/services/pets_api.dart';
 
 abstract class PetRepository {
   Future<List<Pet>> fetchPets();
 }
 
-//TODO: change to actual backend
-class FakePetRepository implements PetRepository {
+class RealPetRepository implements PetRepository {
   @override
   Future<List<Pet>> fetchPets() async {
-    await Future.delayed(const Duration(seconds: 1)); // delay from API
-
-    return [
-      Pet(id: '0', name: 'Sausage', imageUrl: 'assets/images/test_pet.jpg'),
-      Pet(id: '1', name: 'Pausage', imageUrl: 'assets/images/test_pet.jpg'),
-      Pet(id: '2', name: 'Mortage', imageUrl: 'assets/images/test_pet.jpg'),
-    ];
+    final rawList = await PetsApi.listPets();
+    return rawList
+        .map(
+          (p) => Pet(
+            id: p["id"] as int,
+            name: (p["name"] ?? "").toString(),
+            photoUrl: p["photo_url"]?.toString(),
+          ),
+        )
+        .toList();
   }
 }

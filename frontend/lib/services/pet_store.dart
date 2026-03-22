@@ -6,9 +6,15 @@ class PetStore {
 
   static int? _cachedPetId;
 
-  static Future<void> setCurrentPetId(int petId) async {
+  // Serializes writes so concurrent calls don't cause file-lock conflicts
+  static Future<void> _lastWrite = Future.value();
+
+  static Future<void> setCurrentPetId(int petId) {
     _cachedPetId = petId;
-    await _storage.write(key: _kCurrentPetId, value: petId.toString());
+    _lastWrite = _lastWrite
+        .catchError((_) {}) // keep the chain alive even if a previous write failed
+        .then((_) => _storage.write(key: _kCurrentPetId, value: petId.toString()));
+    return _lastWrite;
   }
 
   static Future<int?> getCurrentPetId() async {

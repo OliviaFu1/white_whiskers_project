@@ -4,10 +4,11 @@ import '../../services/pet_store.dart';
 import '../../services/token_store.dart';
 import '../assessment/assessment_page.dart';
 import 'package:frontend/state/notifiers.dart';
+import 'package:frontend/models/pet.dart';
 import '../../services/assessment_api.dart';
 import '../assessment/assessment_results.dart';
-
-// TODO: now the pet is assumed to be first pet, need to update to selected pet
+import 'pet_form_page.dart';
+import 'pet_detail_page.dart';
 
 class MypetPage extends StatefulWidget {
   const MypetPage({super.key});
@@ -23,29 +24,75 @@ class _MypetPageState extends State<MypetPage> {
   static const muted = Color(0xFF676767);
 
   bool isLoading = true;
-  bool isLoadingAssessment = false;
   String? errorText;
 
   List<Map<String, dynamic>> pets = [];
-  Map<String, dynamic>? latestAssessment;
+  final Map<int, Map<String, dynamic>?> _assessmentsByPet = {};
+  final Set<int> _loadingAssessmentPetIds = {};
+
+  final PageController _pageController = PageController();
 
   @override
   void initState() {
     super.initState();
     _loadPets();
+    selectedPetNotifier.addListener(_onSelectedPetChanged);
+  }
+
+  @override
+  void dispose() {
+    _pageController.dispose();
+    selectedPetNotifier.removeListener(_onSelectedPetChanged);
+    super.dispose();
+  }
+
+  void _onSelectedPetChanged() {
+    if (!mounted) return;
+    final selectedId = selectedPetNotifier.value?.id;
+    if (selectedId == null) return;
+    PetStore.setCurrentPetId(selectedId);
+    // Animate carousel to the matching page (if triggered by the app-bar dropdown)
+    final index = pets.indexWhere((p) => (p["id"] as int?) == selectedId);
+    if (index >= 0 && _pageController.hasClients) {
+      final currentPage = _pageController.page?.round() ?? 0;
+      if (currentPage != index) {
+        _pageController.animateToPage(
+          index,
+          duration: const Duration(milliseconds: 300),
+          curve: Curves.easeInOut,
+        );
+      }
+    }
+    setState(() {});
+    if (!_assessmentsByPet.containsKey(selectedId)) {
+      _loadLatestAssessment(selectedId);
+    }
+  }
+
+  void _onPageChanged(int index) {
+    if (index >= pets.length) return;
+    final petId = pets[index]["id"] as int;
+    final model = petsNotifier.value.firstWhere(
+      (p) => p.id == petId,
+      orElse: () => petsNotifier.value.first,
+    );
+    selectedPetNotifier.value = model;
+    PetStore.setCurrentPetId(petId);
+    if (!_assessmentsByPet.containsKey(petId)) {
+      _loadLatestAssessment(petId);
+    }
+    setState(() {}); // rebuild dots
   }
 
   Future<void> _loadPets() async {
+    _assessmentsByPet.clear();
+    _loadingAssessmentPetIds.clear();
+
     try {
       final access = await TokenStore.readAccess();
       if (access == null) throw "No access token found.";
 
       final petList = await PetsApi.listPets();
-
-      if (petList.isNotEmpty) {
-        final firstPetId = petList.first["id"] as int;
-        await PetStore.setCurrentPetId(firstPetId);
-      }
 
       if (!mounted) return;
 
@@ -54,10 +101,41 @@ class _MypetPageState extends State<MypetPage> {
         isLoading = false;
       });
 
-      if (petList.isNotEmpty) {
-        final firstPetId = petList.first["id"] as int;
-        await _loadLatestAssessment(firstPetId);
+      // Sync the app-shell notifiers with the real pet list
+      final petModels = petList
+          .map(
+            (p) => Pet(
+              id: p["id"] as int,
+              name: (p["name"] ?? "").toString(),
+              photoUrl: p["photo_url"]?.toString(),
+            ),
+          )
+          .toList();
+      petsNotifier.value = petModels;
+
+      // Always refresh selectedPetNotifier from the new list so photoUrl etc. stay current
+      final currentId = selectedPetNotifier.value?.id;
+      final refreshed = currentId != null
+          ? petModels.where((p) => p.id == currentId).firstOrNull
+          : null;
+      if (refreshed != null) {
+        selectedPetNotifier.value = refreshed;
+      } else if (petModels.isNotEmpty) {
+        selectedPetNotifier.value = petModels.first;
       }
+
+      // Jump the carousel to the selected pet and load its assessment
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        final selId = selectedPetNotifier.value?.id;
+        final index = pets.indexWhere((p) => (p["id"] as int?) == selId);
+        if (index > 0 && _pageController.hasClients) {
+          _pageController.jumpToPage(index);
+        }
+        if (selId != null && !_assessmentsByPet.containsKey(selId)) {
+          _loadLatestAssessment(selId);
+        }
+      });
     } catch (e) {
       if (!mounted) return;
 
@@ -70,58 +148,52 @@ class _MypetPageState extends State<MypetPage> {
 
   Future<void> _loadLatestAssessment(int petId) async {
     if (!mounted) return;
-
-    setState(() {
-      isLoadingAssessment = true;
-    });
+    setState(() => _loadingAssessmentPetIds.add(petId));
 
     try {
       final assessment = await AssessmentApi.getLatestAssessment(petId: petId);
-
       if (!mounted) return;
-
       setState(() {
-        latestAssessment = assessment;
-        isLoadingAssessment = false;
+        _assessmentsByPet[petId] = assessment;
+        _loadingAssessmentPetIds.remove(petId);
       });
     } catch (_) {
       if (!mounted) return;
-
       setState(() {
-        latestAssessment = null;
-        isLoadingAssessment = false;
+        _assessmentsByPet[petId] = null;
+        _loadingAssessmentPetIds.remove(petId);
       });
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      color: bg,
-      child: SafeArea(
-        child: isLoading
-            ? const Center(child: CircularProgressIndicator())
-            : errorText != null
-            ? Center(
-                child: Text(
-                  errorText!,
-                  style: const TextStyle(color: Colors.red),
-                ),
-              )
-            : _content(),
+    return SingleChildScrollView(
+      child: Container(
+        color: bg,
+        child: SafeArea(
+          child: isLoading
+              ? const Center(child: CircularProgressIndicator())
+              : errorText != null
+              ? Center(
+                  child: Text(
+                    errorText!,
+                    style: const TextStyle(color: Colors.red),
+                  ),
+                )
+              : _content(),
+        ),
       ),
     );
   }
 
   Widget _content() {
-    final pet = pets.isNotEmpty ? pets.first : null;
-
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 22.0),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          const Text(
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 22),
+          child: const Text(
             "My pets",
             style: TextStyle(
               fontSize: 30,
@@ -129,29 +201,112 @@ class _MypetPageState extends State<MypetPage> {
               color: titleColor,
             ),
           ),
-          const SizedBox(height: 14),
-          pet == null ? _emptyPetCard() : _petCard(pet),
-          const SizedBox(height: 14),
-          _historyCard(pet),
-          const SizedBox(height: 22),
-          const Text(
-            "More actions",
-            style: TextStyle(
-              fontSize: 20,
-              fontWeight: FontWeight.w700,
-              color: accent,
+        ),
+        const SizedBox(height: 14),
+        if (pets.isEmpty)
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 22),
+            child: _emptyPetCard(),
+          )
+        else ...[
+          SizedBox(
+            height: MediaQuery.sizeOf(context).height * 0.52,
+            child: PageView.builder(
+              controller: _pageController,
+              onPageChanged: _onPageChanged,
+              itemCount: pets.length,
+              itemBuilder: (context, index) {
+                final pet = pets[index];
+                final petId = pet["id"] as int;
+                final assessment = _assessmentsByPet[petId];
+                final isLoading = _loadingAssessmentPetIds.contains(petId);
+                return SingleChildScrollView(
+                  padding: const EdgeInsets.symmetric(horizontal: 22),
+                  child: Column(
+                    children: [
+                      _petCard(pet),
+                      const SizedBox(height: 14),
+                      _historyCard(pet, assessment, isLoading),
+                    ],
+                  ),
+                );
+              },
             ),
           ),
-          const SizedBox(height: 5),
-          _actionRow(Icons.add_circle_outline, "Add a new pet", onTap: () {}),
-          _actionRow(Icons.group_outlined, "Add a family member", onTap: () {}),
-          _actionRow(
-            Icons.add_circle_outline,
-            "Take a new test",
-            onTap: _handleTakeNewTest,
-          ),
+          if (pets.length > 1) ...[
+            const SizedBox(height: 10),
+            _dotIndicators(),
+          ],
         ],
-      ),
+        const SizedBox(height: 22),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 22),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              const Text(
+                "More actions",
+                style: TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.w700,
+                  color: accent,
+                ),
+              ),
+              const SizedBox(height: 5),
+              _actionRow(
+                Icons.add_circle_outline,
+                "Add a new pet",
+                onTap: _handleAddNewPet,
+              ),
+              _actionRow(
+                Icons.group_outlined,
+                "Add a family member",
+                onTap: () {},
+              ),
+              _actionRow(
+                Icons.add_circle_outline,
+                "Take a new test",
+                onTap: _handleTakeNewTest,
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _dotIndicators() {
+    final currentPage = _pageController.hasClients
+        ? (_pageController.page?.round() ?? 0)
+        : 0;
+
+    if (pets.length > 8) {
+      return Text(
+        "${currentPage + 1} / ${pets.length}",
+        textAlign: TextAlign.center,
+        style: const TextStyle(
+          fontSize: 13,
+          fontWeight: FontWeight.w500,
+          color: muted,
+        ),
+      );
+    }
+
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: List.generate(pets.length, (index) {
+        final active = index == currentPage;
+        return AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
+          margin: const EdgeInsets.symmetric(horizontal: 3),
+          width: active ? 20 : 8,
+          height: 8,
+          decoration: BoxDecoration(
+            color: active ? titleColor : const Color(0xFFCCB9AD),
+            borderRadius: BorderRadius.circular(4),
+          ),
+        );
+      }),
     );
   }
 
@@ -180,85 +335,118 @@ class _MypetPageState extends State<MypetPage> {
     );
   }
 
+  Widget _petPhoto(String? photoUrl, {required double size}) {
+    return CircleAvatar(
+      radius: size / 2,
+      backgroundColor: Colors.grey.shade300,
+      backgroundImage: (photoUrl != null && photoUrl.isNotEmpty)
+          ? NetworkImage(photoUrl)
+          : null,
+      child: (photoUrl == null || photoUrl.isEmpty)
+          ? Icon(Icons.pets, color: muted, size: size * 0.45)
+          : null,
+    );
+  }
+
   Widget _petCard(Map<String, dynamic> pet) {
     final petName = (pet["name"] ?? "").toString();
     final breed = (pet["breed_text"] ?? "").toString().trim();
     final species = (pet["species"] ?? "").toString().trim();
     final sex = (pet["sex"] ?? "").toString().trim();
-
     final infoLines = <String>[
       if (breed.isNotEmpty) breed,
       if (species.isNotEmpty) species,
       if (sex.isNotEmpty) sex,
     ];
 
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: _cardDecoration(),
-      child: Row(
-        children: [
-          Container(
-            width: 82,
-            height: 82,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: Colors.grey.shade300,
-            ),
-            child: const Icon(Icons.pets, color: muted),
-          ),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Column(
+    return GestureDetector(
+      onTap: () => _handleSeePetDetails(pet),
+      child: Container(
+        padding: const EdgeInsets.all(14),
+        decoration: _cardDecoration(),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  petName,
-                  style: const TextStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.w700,
-                    color: muted,
-                  ),
-                ),
-                const SizedBox(height: 6),
-                if (infoLines.isNotEmpty)
-                  Text(
-                    infoLines.join("\n"),
-                    style: const TextStyle(fontSize: 12, color: muted),
-                  ),
-                const SizedBox(height: 10),
-                const Text(
-                  "Favorite Foods",
-                  style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w700,
-                    color: muted,
-                  ),
-                ),
-                const Text("—", style: TextStyle(fontSize: 12, color: muted)),
-                const SizedBox(height: 8),
-                const Text(
-                  "Favorite Activities",
-                  style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w700,
-                    color: muted,
-                  ),
-                ),
-                const Text("—", style: TextStyle(fontSize: 12, color: muted)),
-                const SizedBox(height: 8),
-                const Text(
-                  "Medication history",
-                  style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w700,
-                    color: muted,
+                _petPhoto(pet["photo_url"]?.toString(), size: 82),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        petName,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.w700,
+                          color: muted,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      for (final line in infoLines)
+                        Text(
+                          line,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(fontSize: 13, color: muted),
+                        ),
+                    ],
                   ),
                 ),
               ],
             ),
-          ),
-        ],
+            const SizedBox(height: 14),
+            const Divider(height: 1, color: Color(0xFFEEE8E2)),
+            const SizedBox(height: 10),
+            _petCardRow("Favorite Foods", "—"),
+            const SizedBox(height: 6),
+            _petCardRow("Favorite Activities", "—"),
+            const SizedBox(height: 6),
+            _petCardRow("Medication history", "—"),
+            const SizedBox(height: 10),
+            Align(
+              alignment: Alignment.centerRight,
+              child: Text(
+                "See more →",
+                style: const TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  color: titleColor,
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
+    );
+  }
+
+  Widget _petCardRow(String label, String value) {
+    return Row(
+      children: [
+        SizedBox(
+          width: 140,
+          child: Text(
+            label,
+            style: const TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+              color: muted,
+            ),
+          ),
+        ),
+        Expanded(
+          child: Text(
+            value,
+            style: const TextStyle(fontSize: 13, color: muted),
+            textAlign: TextAlign.right,
+          ),
+        ),
+      ],
     );
   }
 
@@ -272,8 +460,7 @@ class _MypetPageState extends State<MypetPage> {
   Map<String, dynamic>? _assessmentAnswers(Map<String, dynamic>? assessment) {
     if (assessment == null) return null;
 
-    final raw =
-        assessment["answers"];
+    final raw = assessment["answers"];
     if (raw is Map<String, dynamic>) return raw;
 
     return null;
@@ -305,14 +492,19 @@ class _MypetPageState extends State<MypetPage> {
         .toList();
   }
 
-  Widget _historyCard(Map<String, dynamic>? pet) {
-    final heartScore = latestAssessment?["heart_score"];
-    final conditionScore = latestAssessment?["condition_score"];
-    final assessedAtRaw = latestAssessment?["submitted_at"];
+  Widget _historyCard(
+    Map<String, dynamic>? pet,
+    Map<String, dynamic>? assessment,
+    bool isLoadingAssessment,
+  ) {
+    final heartScore = assessment?["heart_score"];
+    final conditionScore = assessment?["condition_score"];
+    final assessedAtRaw = assessment?["submitted_at"];
     final assessedAtText = _formatAssessmentDate(assessedAtRaw);
     final petName = (pet?["name"] ?? "").toString().trim();
-    final hasAssessment = latestAssessment != null;
-    final scaleScores = _buildScaleScores(latestAssessment);
+    final hasAssessment = assessment != null;
+    final scaleScores = _buildScaleScores(assessment);
+    final petId = pet?["id"] as int?;
 
     return GestureDetector(
       onTap: !hasAssessment
@@ -324,7 +516,9 @@ class _MypetPageState extends State<MypetPage> {
                     petName: petName.isEmpty ? "Your pet" : petName,
                     heartScore: heartScore,
                     conditionScore: conditionScore,
-                    significantlyChallenged: _hasSignificantlyChallengedFlag(),
+                    significantlyChallenged: _hasSignificantlyChallengedFlag(
+                      assessment,
+                    ),
                     scaleScores: scaleScores,
                     onDone: () {
                       Navigator.of(context).pop();
@@ -332,6 +526,10 @@ class _MypetPageState extends State<MypetPage> {
                   ),
                 ),
               );
+              if (petId != null && mounted) {
+                _assessmentsByPet.remove(petId);
+                _loadLatestAssessment(petId);
+              }
             },
       child: Opacity(
         opacity: hasAssessment ? 1.0 : 0.75,
@@ -491,11 +689,35 @@ class _MypetPageState extends State<MypetPage> {
     );
   }
 
+  Future<void> _handleAddNewPet() async {
+    final result = await Navigator.of(context).push<Map<String, dynamic>>(
+      MaterialPageRoute(builder: (_) => const PetFormPage()),
+    );
+    if (!mounted || result == null) return;
+    final newId = result["id"] as int?;
+    await _loadPets();
+    // Select the newly created pet
+    if (!mounted || newId == null) return;
+    final newPet = petsNotifier.value.firstWhere(
+      (p) => p.id == newId,
+      orElse: () => petsNotifier.value.first,
+    );
+    selectedPetNotifier.value = newPet;
+  }
+
+  Future<void> _handleSeePetDetails(Map<String, dynamic> pet) async {
+    await Navigator.of(
+      context,
+    ).push(MaterialPageRoute(builder: (_) => PetDetailPage(pet: pet)));
+    if (!mounted) return;
+    await _loadPets();
+  }
+
   Future<void> _handleTakeNewTest() async {
     if (pets.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Please add a pet first.")),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text("Please add a pet first.")));
       return;
     }
 
@@ -546,13 +768,13 @@ class _MypetPageState extends State<MypetPage> {
       ),
       builder: (context) {
         return SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(20, 20, 20, 24),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 20, 20, 0),
+                child: const Text(
                   "Select a pet",
                   style: TextStyle(
                     fontSize: 22,
@@ -560,47 +782,68 @@ class _MypetPageState extends State<MypetPage> {
                     color: titleColor,
                   ),
                 ),
-                const SizedBox(height: 16),
-                ...pets.map((pet) {
-                  final petName = (pet["name"] ?? "").toString().trim();
-                  final breed = (pet["breed_text"] ?? "").toString().trim();
-                  final species = (pet["species"] ?? "").toString().trim();
+              ),
+              const SizedBox(height: 8),
+              Flexible(
+                child: ListView(
+                  padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
+                  shrinkWrap: true,
+                  children: pets.map((pet) {
+                    final petName = (pet["name"] ?? "").toString().trim();
+                    final breed = (pet["breed_text"] ?? "").toString().trim();
+                    final species = (pet["species"] ?? "").toString().trim();
 
-                  final subtitle = [
-                    if (breed.isNotEmpty) breed,
-                    if (species.isNotEmpty) species,
-                  ].join(" • ");
+                    final subtitle = [
+                      if (breed.isNotEmpty) breed,
+                      if (species.isNotEmpty) species,
+                    ].join(" • ");
 
-                  return ListTile(
-                    contentPadding: EdgeInsets.zero,
-                    leading: const CircleAvatar(
-                      backgroundColor: Colors.white,
-                      child: Icon(Icons.pets, color: muted),
-                    ),
-                    title: Text(
-                      petName.isEmpty ? "Unnamed pet" : petName,
-                      style: const TextStyle(
-                        color: muted,
-                        fontWeight: FontWeight.w600,
+                    final photoUrl = pet["photo_url"]?.toString();
+                    final hasPhoto = photoUrl != null && photoUrl.isNotEmpty;
+
+                    return ListTile(
+                      contentPadding: EdgeInsets.zero,
+                      leading: CircleAvatar(
+                        backgroundColor: Colors.grey.shade300,
+                        backgroundImage: hasPhoto
+                            ? NetworkImage(photoUrl)
+                            : null,
+                        child: hasPhoto
+                            ? null
+                            : const Icon(Icons.pets, color: muted),
                       ),
-                    ),
-                    subtitle: subtitle.isEmpty
-                        ? null
-                        : Text(subtitle, style: const TextStyle(color: muted)),
-                    trailing: const Icon(Icons.chevron_right, color: muted),
-                    onTap: () => Navigator.of(context).pop(pet),
-                  );
-                }),
-              ],
-            ),
+                      title: Text(
+                        petName.isEmpty ? "Unnamed pet" : petName,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: muted,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      subtitle: subtitle.isEmpty
+                          ? null
+                          : Text(
+                              subtitle,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(color: muted),
+                            ),
+                      trailing: const Icon(Icons.chevron_right, color: muted),
+                      onTap: () => Navigator.of(context).pop(pet),
+                    );
+                  }).toList(),
+                ),
+              ),
+            ],
           ),
         );
       },
     );
   }
 
-  bool _hasSignificantlyChallengedFlag() {
-    final value = latestAssessment?["significantly_challenged"];
+  bool _hasSignificantlyChallengedFlag(Map<String, dynamic>? assessment) {
+    final value = assessment?["significantly_challenged"];
 
     if (value is bool) return value;
     if (value is String) return value.toLowerCase() == "true";
