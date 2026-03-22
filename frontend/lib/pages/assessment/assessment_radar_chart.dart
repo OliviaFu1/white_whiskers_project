@@ -5,14 +5,12 @@ class AssessmentRadarChart extends StatelessWidget {
   final List<double> scores; // length = 7
   final List<String> labels;
   final double size;
-  final ImageProvider? centerImage;
 
   const AssessmentRadarChart({
     super.key,
     required this.scores,
     required this.labels,
     this.size = 260,
-    this.centerImage,
   });
 
   @override
@@ -24,7 +22,6 @@ class AssessmentRadarChart extends StatelessWidget {
         painter: _RadarPainter(
           scores: scores,
           labels: labels,
-          centerImage: centerImage,
         ),
       ),
     );
@@ -34,12 +31,10 @@ class AssessmentRadarChart extends StatelessWidget {
 class _RadarPainter extends CustomPainter {
   final List<double> scores;
   final List<String> labels;
-  final ImageProvider? centerImage;
 
   _RadarPainter({
     required this.scores,
     required this.labels,
-    this.centerImage,
   });
 
   @override
@@ -52,17 +47,15 @@ class _RadarPainter extends CustomPainter {
       ..style = PaintingStyle.stroke
       ..strokeWidth = 2;
 
-    // rings
-    ringPaint.color = const Color(0xFFE38B8B); // red (1–3)
+    ringPaint.color = const Color(0xFFE38B8B);
     canvas.drawCircle(center, radius * 0.33, ringPaint);
 
-    ringPaint.color = const Color(0xFFA67C52); // brown (4–6)
+    ringPaint.color = const Color(0xFFA67C52);
     canvas.drawCircle(center, radius * 0.66, ringPaint);
 
-    ringPaint.color = const Color(0xFF7FB77E); // green (7–10)
+    ringPaint.color = const Color(0xFF7FB77E);
     canvas.drawCircle(center, radius, ringPaint);
 
-    // axis lines
     final axisPaint = Paint()
       ..color = Colors.black12
       ..strokeWidth = 1;
@@ -75,7 +68,6 @@ class _RadarPainter extends CustomPainter {
     }
 
     final path = Path();
-
     final pointPaint = Paint()..color = const Color(0xFF9C948C);
     final polygonPoints = <Offset>[];
 
@@ -83,7 +75,6 @@ class _RadarPainter extends CustomPainter {
       final score = scores[i].clamp(1, 10).toDouble();
       final normalized = score / 10.0;
       final r = radius * normalized;
-
       final angle = -pi / 2 + i * angleStep;
 
       final x = center.dx + r * cos(angle);
@@ -120,13 +111,16 @@ class _RadarPainter extends CustomPainter {
       textDirection: TextDirection.ltr,
     );
 
-    // labels
     for (int i = 0; i < labels.length; i++) {
       final angle = -pi / 2 + i * angleStep;
       final labelRadius = radius + 28;
 
-      final x = center.dx + labelRadius * cos(angle);
-      final y = center.dy + labelRadius * sin(angle);
+      double x = center.dx + labelRadius * cos(angle);
+      double y = center.dy + labelRadius * sin(angle);
+
+      if (i == 2) {
+        y += 10;
+      }
 
       textPainter.text = TextSpan(
         text: labels[i],
@@ -147,11 +141,9 @@ class _RadarPainter extends CustomPainter {
       );
     }
 
-    // score numbers beside dots
     for (int i = 0; i < polygonPoints.length; i++) {
       final point = polygonPoints[i];
       final score = scores[i].clamp(1, 10);
-
       final angle = -pi / 2 + i * angleStep;
 
       const offsetDist = 14.0;
@@ -168,13 +160,31 @@ class _RadarPainter extends CustomPainter {
       );
 
       textPainter.layout();
-      textPainter.paint(
-        canvas,
-        Offset(
-          sx - textPainter.width / 2,
-          sy - textPainter.height / 2,
-        ),
+
+      final textOffset = Offset(
+        sx - textPainter.width / 2,
+        sy - textPainter.height / 2,
       );
+
+      final bgRect = RRect.fromRectAndRadius(
+        Rect.fromCenter(
+          center: Offset(sx, sy),
+          width: textPainter.width + 10,
+          height: textPainter.height + 6,
+        ),
+        const Radius.circular(8),
+      );
+
+      final bgPaint = Paint()..color = Colors.white;
+
+      final borderPaint = Paint()
+        ..color = const Color(0xFFD8C2AD)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1;
+
+      canvas.drawRRect(bgRect, bgPaint);
+      canvas.drawRRect(bgRect, borderPaint);
+      textPainter.paint(canvas, textOffset);
     }
   }
 
