@@ -331,7 +331,7 @@ class _LongOptionCards extends StatelessWidget {
 class _RatingBlock extends StatelessWidget {
   final String prompt;
   final String? details;
-  final int score;
+  final int? score;
   final String leftLabel;
   final String rightLabel;
   final ValueChanged<int> onChanged;
@@ -347,6 +347,8 @@ class _RatingBlock extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final bool hasScore = score != null;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -370,11 +372,11 @@ class _RatingBlock extends StatelessWidget {
                   trackHeight: 4,
                 ),
                 child: Slider(
-                  value: score.toDouble(),
+                  value: (score ?? 5).toDouble(),
                   min: 1,
                   max: 10,
                   divisions: 9,
-                  label: "$score",
+                  label: hasScore ? "$score" : null,
                   onChanged: (v) => onChanged(v.round()),
                 ),
               ),
@@ -387,7 +389,9 @@ class _RatingBlock extends StatelessWidget {
               ),
               const SizedBox(height: 8),
               Text(
-                "Selected score: $score",
+                hasScore
+                    ? "Selected score: $score"
+                    : "Selected score: Not filled",
                 style: const TextStyle(fontWeight: FontWeight.w700),
               ),
             ],
