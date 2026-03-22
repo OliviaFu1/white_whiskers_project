@@ -118,10 +118,6 @@ class _RadarPainter extends CustomPainter {
       double x = center.dx + labelRadius * cos(angle);
       double y = center.dy + labelRadius * sin(angle);
 
-      if (i == 2) {
-        y += 10;
-      }
-
       textPainter.text = TextSpan(
         text: labels[i],
         style: const TextStyle(
