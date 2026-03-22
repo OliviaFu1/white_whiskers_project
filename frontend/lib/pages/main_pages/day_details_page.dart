@@ -320,6 +320,7 @@ class _DayDetailsPageState extends State<DayDetailsPage> {
       final visibility = (j["visibility"] ?? "").toString().trim();
       final date = _displayEntryDate(j["entry_date"]);
       final author = _displayAuthor(j);
+      final photoUrl = (j["photo_url"] ?? "").toString().trim();
 
       return Padding(
         padding: const EdgeInsets.only(bottom: 10),
@@ -359,8 +360,48 @@ class _DayDetailsPageState extends State<DayDetailsPage> {
                   ),
                 ),
               ],
+              if (photoUrl.isNotEmpty) ...[
+                const SizedBox(height: 10),
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(12),
+                  child: Image.network(
+                    photoUrl,
+                    width: double.infinity,
+                    height: 180,
+                    fit: BoxFit.cover,
+                    errorBuilder: (context, error, stackTrace) {
+                      return Container(
+                        height: 180,
+                        width: double.infinity,
+                        alignment: Alignment.center,
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFF7F5F3),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: const Text(
+                          "Failed to load image",
+                          style: TextStyle(color: muted),
+                        ),
+                      );
+                    },
+                    loadingBuilder: (context, child, loadingProgress) {
+                      if (loadingProgress == null) return child;
+                      return Container(
+                        height: 180,
+                        width: double.infinity,
+                        alignment: Alignment.center,
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFF7F5F3),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: const CircularProgressIndicator(),
+                      );
+                    },
+                  ),
+                ),
+              ],
               if (text.isNotEmpty) ...[
-                const SizedBox(height: 8),
+                const SizedBox(height: 10),
                 Text(text, style: const TextStyle(color: muted)),
               ],
             ],
