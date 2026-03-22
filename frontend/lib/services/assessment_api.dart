@@ -33,8 +33,12 @@ class AssessmentApi {
     if (assessments.isEmpty) return null;
 
     assessments.sort((a, b) {
-      final aTime = DateTime.parse(a["submitted_at"]);
-      final bTime = DateTime.parse(b["submitted_at"]);
+      final aTime = DateTime.tryParse((a["submitted_at"] ?? "").toString());
+      final bTime = DateTime.tryParse((b["submitted_at"] ?? "").toString());
+
+      if (aTime == null && bTime == null) return 0;
+      if (aTime == null) return 1;
+      if (bTime == null) return -1;
       return bTime.compareTo(aTime);
     });
 
