@@ -20,6 +20,7 @@ class PetAssessment(models.Model):
     # Calculated outputs
     heart_score = models.IntegerField()
     condition_score = models.IntegerField()
+    significantly_challenged = models.BooleanField(default=False)
 
     submitted_at = models.DateTimeField(auto_now_add=True)
 

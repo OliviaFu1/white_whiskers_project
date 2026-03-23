@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import '../../services/assessment_api.dart';
-import '../app_shell.dart';
 
 part 'assessment_components.dart';
 
@@ -353,7 +352,8 @@ class _AssessmentPageState extends State<AssessmentPage> {
         score >= 30 && score <= 90 && _hasSignificantlyChallengedFlag();
 
     if (score < 30) return "Condition Score Range: <30";
-    if (challenged) return "Condition Score Range: 30-90, but significantly challenged";
+    if (challenged)
+      return "Condition Score Range: 30-90, but significantly challenged";
     if (score > 60) return "Condition Score Range: >60";
     return "Condition Score Range: 30-60";
   }
@@ -435,6 +435,7 @@ class _AssessmentPageState extends State<AssessmentPage> {
       },
       "heart_score": _heartScore(),
       "condition_score": _conditionScore(),
+      "significantly_challenged": _hasSignificantlyChallengedFlag(),
     };
   }
 
@@ -454,10 +455,7 @@ class _AssessmentPageState extends State<AssessmentPage> {
         context,
       ).showSnackBar(const SnackBar(content: Text("Assessment saved.")));
 
-      Navigator.of(context).pushAndRemoveUntil(
-        MaterialPageRoute(builder: (_) => const AppShell()),
-        (route) => false,
-      );
+      Navigator.of(context).pop(true);
     } catch (e) {
       if (!mounted) return;
 

@@ -721,6 +721,17 @@ class _MypetPageState extends State<MypetPage> {
       return;
     }
 
+    // Use the currently displayed pet if available
+    final selectedId = selectedPetNotifier.value?.id;
+    if (selectedId != null) {
+      final currentPet = pets.firstWhere(
+        (p) => (p["id"] as int?) == selectedId,
+        orElse: () => pets.first,
+      );
+      await _startAssessmentForPet(currentPet);
+      return;
+    }
+
     if (pets.length == 1) {
       await _startAssessmentForPet(pets.first);
       return;
