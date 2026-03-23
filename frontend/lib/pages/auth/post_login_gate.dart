@@ -11,7 +11,6 @@ import 'package:frontend/state/notifiers.dart';
 import '../../services/auth_api.dart';
 import '../../services/token_store.dart';
 import '../onboarding/onboarding_flow.dart';
-// import '../main_pages/mypet_page.dart';
 
 class PostLoginGate extends StatefulWidget {
   const PostLoginGate({super.key});
@@ -60,11 +59,13 @@ class _PostLoginGateState extends State<PostLoginGate> {
       if (rawPets.isNotEmpty) {
         await PetStore.setCurrentPetId(rawPets.first["id"] as int);
         final pets = rawPets
-            .map((p) => Pet(
-                  id: p["id"].toString(),
-                  name: (p["name"] ?? "Pet") as String,
-                  imageUrl: 'assets/images/test_pet.jpg',
-                ))
+            .map(
+              (p) => Pet(
+                id: p["id"] as int,
+                name: (p["name"] ?? "Pet") as String,
+                photoUrl: p["photo_url"]?.toString(),
+              ),
+            )
             .toList();
         petsNotifier.value = pets;
         selectedPetNotifier.value = pets.first;

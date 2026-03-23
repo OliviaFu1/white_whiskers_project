@@ -36,11 +36,13 @@ class _OnboardingFlowState extends State<OnboardingFlow> {
   String? species;
   String? sex;
   bool? spayedNeutered;
+  bool _spayedAnswered = false;
   final breed = TextEditingController();
 
   // Age/Birthdate
   AgeInputMode? ageMode; // user must pick first
   int ageYears = 0; // wheel stability
+  int ageMonths = 0;
   DateTime? birthDate;
 
   // touched flags for errors
@@ -69,7 +71,7 @@ class _OnboardingFlowState extends State<OnboardingFlow> {
 
   bool get _speciesValid => species != null;
   bool get _sexValid => sex != null;
-  bool get _spayedValid => spayedNeutered != null;
+  bool get _spayedValid => _spayedAnswered;
   bool get _breedValid => breed.text.trim().isNotEmpty;
 
   bool get _ageModeValid => ageMode != null;
@@ -101,7 +103,10 @@ class _OnboardingFlowState extends State<OnboardingFlow> {
       final access = await TokenStore.readAccess();
       if (access == null) throw "Session expired. Please log in again.";
 
-      final data = await AuthApi.updateMe(accessToken: access, name: ownerName.text.trim());
+      final data = await AuthApi.updateMe(
+        accessToken: access,
+        name: ownerName.text.trim(),
+      );
       userNotifier.value = User.fromJson(data);
 
       if (!mounted) return;
@@ -125,15 +130,33 @@ class _OnboardingFlowState extends State<OnboardingFlow> {
     });
 
     try {
+      String? birthdateStr;
+      if (ageMode == AgeInputMode.birthdate && birthDate != null) {
+        birthdateStr = birthDate!.toIso8601String().split('T').first;
+      } else if (ageMode == AgeInputMode.age) {
+        final today = DateTime.now();
+        int targetMonth = today.month - ageMonths;
+        int targetYear = today.year - ageYears;
+        while (targetMonth <= 0) {
+          targetMonth += 12;
+          targetYear -= 1;
+        }
+        int targetDay = today.day;
+        final maxDay = DateTime(targetYear, targetMonth + 1, 0).day;
+        if (targetDay > maxDay) targetDay = maxDay;
+        birthdateStr =
+            "${targetYear.toString().padLeft(4, '0')}-"
+            "${targetMonth.toString().padLeft(2, '0')}-"
+            "${targetDay.toString().padLeft(2, '0')}";
+      }
+
       final petBody = <String, dynamic>{
         "name": petName.text.trim(),
         "species": species,
         "sex": sex,
         "spayed_neutered": spayedNeutered,
         "breed_text": breed.text.trim(),
-        if (ageMode == AgeInputMode.age) "age_years": ageYears,
-        if (ageMode == AgeInputMode.birthdate && birthDate != null)
-          "birthdate": birthDate!.toIso8601String().split('T').first,
+        if (birthdateStr != null) "birthdate": birthdateStr,
       };
 
       final createdPet = await PetsApi.createPet(body: petBody);
@@ -153,11 +176,13 @@ class _OnboardingFlowState extends State<OnboardingFlow> {
         if (rawPets.isNotEmpty) {
           await PetStore.setCurrentPetId(rawPets.first["id"] as int);
           final pets = rawPets
-              .map((p) => Pet(
-                    id: p["id"].toString(),
-                    name: (p["name"] ?? "Pet") as String,
-                    imageUrl: 'assets/images/test_pet.jpg',
-                  ))
+              .map(
+                (p) => Pet(
+                  id: p["id"] as int,
+                  name: (p["name"] ?? "Pet") as String,
+                  photoUrl: p["photo_url"]?.toString(),
+                ),
+              )
               .toList();
           petsNotifier.value = pets;
           selectedPetNotifier.value = pets.first;
@@ -318,8 +343,10 @@ class _OnboardingFlowState extends State<OnboardingFlow> {
               sex = v;
             }),
             spayedValue: spayedNeutered,
+            spayedAnswered: _spayedAnswered,
             onSpayedChanged: (v) => setState(() {
               _spayTouched = true;
+              _spayedAnswered = true;
               spayedNeutered = v;
             }),
             muted: muted,
@@ -370,6 +397,7 @@ class _OnboardingFlowState extends State<OnboardingFlow> {
             mode: ageMode,
             muted: muted,
             ageYears: ageYears,
+            ageMonths: ageMonths,
             birthDate: birthDate,
             onModeChanged: (m) => setState(() {
               _ageModeTouched = true;
@@ -380,9 +408,13 @@ class _OnboardingFlowState extends State<OnboardingFlow> {
               }
               _ageValueTouched = false;
             }),
-            onAgeChanged: (v) => setState(() {
+            onAgeYearsChanged: (v) => setState(() {
               _ageValueTouched = true;
               ageYears = v;
+            }),
+            onAgeMonthsChanged: (v) => setState(() {
+              _ageValueTouched = true;
+              ageMonths = v;
             }),
             onBirthPick: (d) => setState(() {
               _ageValueTouched = true;
@@ -463,6 +495,7 @@ class SexAndSpayField extends StatelessWidget {
   final ValueChanged<String?> onSexChanged;
 
   final bool? spayedValue;
+  final bool spayedAnswered;
   final ValueChanged<bool?> onSpayedChanged;
 
   final Color muted;
@@ -472,6 +505,7 @@ class SexAndSpayField extends StatelessWidget {
     required this.sexValue,
     required this.onSexChanged,
     required this.spayedValue,
+    required this.spayedAnswered,
     required this.onSpayedChanged,
     required this.muted,
   });
@@ -511,6 +545,11 @@ class SexAndSpayField extends StatelessWidget {
               selected: spayedValue == false,
               onSelected: (_) => onSpayedChanged(false),
             ),
+            ChoiceChip(
+              label: const Text("Unknown"),
+              selected: spayedAnswered && spayedValue == null,
+              onSelected: (_) => onSpayedChanged(null),
+            ),
           ],
         ),
       ],
@@ -523,7 +562,9 @@ class AgeOrBirthdateField extends StatelessWidget {
   final ValueChanged<AgeInputMode> onModeChanged;
 
   final int ageYears;
-  final ValueChanged<int> onAgeChanged;
+  final ValueChanged<int> onAgeYearsChanged;
+  final int ageMonths;
+  final ValueChanged<int> onAgeMonthsChanged;
 
   final DateTime? birthDate;
   final ValueChanged<DateTime?> onBirthPick;
@@ -535,7 +576,9 @@ class AgeOrBirthdateField extends StatelessWidget {
     required this.mode,
     required this.onModeChanged,
     required this.ageYears,
-    required this.onAgeChanged,
+    required this.onAgeYearsChanged,
+    required this.ageMonths,
+    required this.onAgeMonthsChanged,
     required this.birthDate,
     required this.onBirthPick,
     required this.muted,
@@ -570,10 +613,28 @@ class AgeOrBirthdateField extends StatelessWidget {
             style: TextStyle(color: muted, fontSize: 12),
           )
         else if (mode == AgeInputMode.age)
-          AgeWheelPicker(
-            value: ageYears,
-            lineColor: muted,
-            onChanged: onAgeChanged,
+          Row(
+            children: [
+              Expanded(
+                child: AgeWheelPicker(
+                  value: ageYears,
+                  label: "Years",
+                  maxValue: 40,
+                  lineColor: muted,
+                  onChanged: onAgeYearsChanged,
+                ),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: AgeWheelPicker(
+                  value: ageMonths,
+                  label: "Months",
+                  maxValue: 11,
+                  lineColor: muted,
+                  onChanged: onAgeMonthsChanged,
+                ),
+              ),
+            ],
           )
         else
           _BirthDateField(
@@ -591,6 +652,7 @@ class AgeWheelPicker extends StatelessWidget {
   final ValueChanged<int> onChanged;
   final Color lineColor;
   final String label;
+  final int maxValue;
 
   const AgeWheelPicker({
     super.key,
@@ -598,6 +660,7 @@ class AgeWheelPicker extends StatelessWidget {
     required this.onChanged,
     required this.lineColor,
     this.label = "Age (years)",
+    this.maxValue = 40,
   });
 
   @override
@@ -618,7 +681,10 @@ class AgeWheelPicker extends StatelessWidget {
           scrollController: FixedExtentScrollController(initialItem: value),
           itemExtent: 34,
           onSelectedItemChanged: onChanged,
-          children: List.generate(41, (i) => Center(child: Text("$i"))),
+          children: List.generate(
+            maxValue + 1,
+            (i) => Center(child: Text("$i")),
+          ),
         ),
       ),
     );

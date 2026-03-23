@@ -42,3 +42,34 @@ class UserMeUpdateSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
         fields = ("name", "last_name", "location")
+
+
+class ChangeEmailSerializer(serializers.Serializer):
+    new_email = serializers.EmailField()
+
+    def validate_new_email(self, value):
+        value = value.strip().lower()
+        user = self.context['request'].user
+        if value == user.email:
+            raise serializers.ValidationError("This is already your current email.")
+        if User.objects.filter(email=value).exclude(pk=user.pk).exists():
+            raise serializers.ValidationError("This email is already in use.")
+        return value
+
+
+class ChangePasswordSerializer(serializers.Serializer):
+    current_password = serializers.CharField()
+    new_password = serializers.CharField(min_length=8)
+    confirm_password = serializers.CharField()
+
+    def validate(self, attrs):
+        user = self.context['request'].user
+        if not user.check_password(attrs['current_password']):
+            raise serializers.ValidationError(
+                {'current_password': 'Current password is incorrect.'}
+            )
+        if attrs['new_password'] != attrs['confirm_password']:
+            raise serializers.ValidationError(
+                {'confirm_password': 'Passwords do not match.'}
+            )
+        return attrs

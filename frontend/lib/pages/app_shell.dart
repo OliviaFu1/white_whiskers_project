@@ -218,7 +218,12 @@ class _PetsDropdownState extends State<PetsDropdown> {
               return const SizedBox();
             }
             return PopupMenuButton<Pet>(
-              offset: const Offset(10, 42),
+              position: PopupMenuPosition.under,
+              constraints: const BoxConstraints(
+                minWidth: 160,
+                maxWidth: 200,
+                maxHeight: 260,
+              ),
               onSelected: (Pet selectedPet) {
                 selectedPetNotifier.value = selectedPet;
               },
@@ -253,7 +258,7 @@ class _SelectedPetButton extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          _PetAvatar(imageUrl: pet.imageUrl, radius: 12),
+          _PetAvatar(photoUrl: pet.photoUrl, radius: 12),
           const SizedBox(width: 6),
           ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 72),
@@ -292,23 +297,39 @@ class _PetMenuItemContent extends StatelessWidget {
   Widget build(BuildContext context) {
     return Row(
       children: [
-        Expanded(child: Text(pet.name, overflow: TextOverflow.ellipsis)),
-        const SizedBox(width: 3),
-        _PetAvatar(imageUrl: pet.imageUrl, radius: 16),
+        _PetAvatar(photoUrl: pet.photoUrl, radius: 16),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Text(
+            pet.name,
+            overflow: TextOverflow.ellipsis,
+            maxLines: 1,
+          ),
+        ),
       ],
     );
   }
 }
 
 class _PetAvatar extends StatelessWidget {
-  final String imageUrl;
+  final String? photoUrl;
   final double radius;
 
-  const _PetAvatar({required this.imageUrl, required this.radius});
+  const _PetAvatar({required this.photoUrl, required this.radius});
 
   @override
   Widget build(BuildContext context) {
-    return CircleAvatar(radius: radius, backgroundImage: AssetImage(imageUrl));
+    if (photoUrl != null && photoUrl!.isNotEmpty) {
+      return CircleAvatar(
+        radius: radius,
+        backgroundImage: NetworkImage(photoUrl!),
+      );
+    }
+    return CircleAvatar(
+      radius: radius,
+      backgroundColor: Colors.grey.shade300,
+      child: Icon(Icons.pets, size: radius, color: Colors.grey.shade600),
+    );
   }
 }
 

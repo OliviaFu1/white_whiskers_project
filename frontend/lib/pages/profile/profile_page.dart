@@ -405,8 +405,15 @@ class _EditProfileSheetState extends State<_EditProfileSheet> {
             const SizedBox(height: 8),
             TextButton.icon(
               onPressed: _uploadingPhoto ? null : _removePhoto,
-              icon: const Icon(Icons.delete_outline, size: 16, color: Colors.red),
-              label: const Text('Remove photo', style: TextStyle(color: Colors.red)),
+              icon: const Icon(
+                Icons.delete_outline,
+                size: 16,
+                color: Colors.red,
+              ),
+              label: const Text(
+                'Remove photo',
+                style: TextStyle(color: Colors.red),
+              ),
             ),
           ],
           const SizedBox(height: 24),
