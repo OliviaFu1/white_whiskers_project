@@ -211,7 +211,7 @@ class _MypetPageState extends State<MypetPage> {
           )
         else ...[
           SizedBox(
-            height: MediaQuery.sizeOf(context).height * 0.46,
+            height: MediaQuery.sizeOf(context).height * 0.48,
             child: PageView.builder(
               controller: _pageController,
               onPageChanged: _onPageChanged,

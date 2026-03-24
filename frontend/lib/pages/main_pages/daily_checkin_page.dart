@@ -286,7 +286,7 @@ class _DailyCheckinPageState extends State<DailyCheckinPage> {
     final dirty = _isDirtyFor(petId);
     final hasRating = _hasRatingFor(petId);
     final dateStr = _yyyyMmDd(_day);
-    final promptDay = _isToday(_day) ? "today" : dateStr;
+    final promptDay = _isToday(_day) ? "today" : "this day";
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
