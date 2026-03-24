@@ -6,9 +6,8 @@ import 'package:frontend/pages/app_shell.dart';
 import 'package:frontend/services/calendar_api.dart';
 import 'package:frontend/services/pet_store.dart';
 import 'package:frontend/services/pets_api.dart';
-import 'package:frontend/services/token_store.dart';
-
-// TODO: now the pet is assumed to be first pet, need to update to selected pet
+import 'package:frontend/state/notifiers.dart';
+import 'package:frontend/models/pet.dart';
 
 class JournalPage extends StatefulWidget {
   const JournalPage({super.key});
@@ -46,15 +45,24 @@ class _JournalPageState extends State<JournalPage> {
   File? _pickedImage;
   List<Map<String, dynamic>> pets = [];
 
+  void _onSelectedPetChanged() {
+    final selected = selectedPetNotifier.value;
+    if (selected == null || !mounted) return;
+    setState(() {});
+    PetStore.setCurrentPetId(selected.id);
+  }
+
   @override
   void initState() {
     super.initState();
     _selectedDay = _dateOnly(DateTime.now());
     _loadPets();
+    selectedPetNotifier.addListener(_onSelectedPetChanged);
   }
 
   @override
   void dispose() {
+    selectedPetNotifier.removeListener(_onSelectedPetChanged);
     _titleCtl.dispose();
     _textCtl.dispose();
     _manualTagCtl.dispose();
@@ -63,14 +71,31 @@ class _JournalPageState extends State<JournalPage> {
 
   Future<void> _loadPets() async {
     try {
-      final access = await TokenStore.readAccess();
-      if (access == null) throw "No access token found.";
-
       final petList = await PetsApi.listPets();
 
-      if (petList.isNotEmpty) {
-        final firstPetId = petList.first["id"] as int;
-        await PetStore.setCurrentPetId(firstPetId);
+      final petModels = petList
+          .map(
+            (p) => Pet(
+              id: p["id"] as int,
+              name: (p["name"] ?? "").toString(),
+              photoUrl: p["photo_url"]?.toString(),
+            ),
+          )
+          .toList();
+
+      petsNotifier.value = petModels;
+
+      final currentId = selectedPetNotifier.value?.id;
+      final refreshed = currentId != null
+          ? petModels.where((p) => p.id == currentId).firstOrNull
+          : null;
+
+      if (refreshed != null) {
+        selectedPetNotifier.value = refreshed;
+        await PetStore.setCurrentPetId(refreshed.id);
+      } else if (petModels.isNotEmpty) {
+        selectedPetNotifier.value = petModels.first;
+        await PetStore.setCurrentPetId(petModels.first.id);
       }
 
       if (!mounted) return;
@@ -94,7 +119,17 @@ class _JournalPageState extends State<JournalPage> {
       "${d.month.toString().padLeft(2, '0')}-"
       "${d.day.toString().padLeft(2, '0')}";
 
-  Map<String, dynamic>? get _pet => pets.isNotEmpty ? pets.first : null;
+  Map<String, dynamic>? get _pet {
+    if (pets.isEmpty) return null;
+
+    final selectedId = selectedPetNotifier.value?.id;
+    if (selectedId == null) return pets.first;
+
+    return pets.firstWhere(
+      (p) => (p["id"] as int?) == selectedId,
+      orElse: () => pets.first,
+    );
+  }
 
   String get _petNameDisplay {
     final name = (_pet?["name"] ?? "").toString().trim();
@@ -170,8 +205,9 @@ class _JournalPageState extends State<JournalPage> {
     });
 
     try {
-      final petId = await PetStore.getCurrentPetId();
+      final petId = _pet?["id"] as int?;
       if (petId == null) throw "No pet selected.";
+      await PetStore.setCurrentPetId(petId);
 
       final body = <String, dynamic>{
         "pet_id": petId,
@@ -559,7 +595,7 @@ class _JournalPageState extends State<JournalPage> {
     final selected = _tag == value && _manualTagCtl.text.trim().isEmpty;
 
     return InkWell(
-      onTap: _submitting
+      onTap: (_submitting || _uploadingPhoto)
           ? null
           : () {
               _manualTagCtl.clear();
