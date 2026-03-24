@@ -3,6 +3,7 @@ from .models import Pet, PetUser
 
 class PetSerializer(serializers.ModelSerializer):
     role = serializers.SerializerMethodField(read_only=True)
+    photo_url = serializers.SerializerMethodField(read_only=True)
 
     class Meta:
         model = Pet
@@ -13,6 +14,7 @@ class PetSerializer(serializers.ModelSerializer):
             "species",
             "breed_text",
             "sex",
+            "spayed_neutered",
             "birthdate",
             "date_of_death",
             "weight_kg",
@@ -20,7 +22,13 @@ class PetSerializer(serializers.ModelSerializer):
             "updated_at",
             "role",
         ]
-        read_only_fields = ["id", "created_at", "updated_at", "role"]
+        read_only_fields = ["id", "created_at", "updated_at", "role", "photo_url"]
+
+    def get_photo_url(self, obj: Pet):
+        request = self.context.get("request")
+        if obj.photo and request:
+            return request.build_absolute_uri(obj.photo.url)
+        return None
 
     def get_role(self, obj: Pet):
         request = self.context.get("request")
@@ -36,12 +44,10 @@ class PetCreateSerializer(serializers.ModelSerializer):
         fields = [
             "id",
             "name",
-            "photo_url",
             "species",
             "breed_text",
             "sex",
             "spayed_neutered",
-            "age_years",
             "birthdate",
             "weight_kg",
         ]
@@ -57,21 +63,10 @@ class PetCreateSerializer(serializers.ModelSerializer):
             if v is None or (isinstance(v, str) and v.strip() == ""):
                 errors[k] = "This field is required."
 
-        # Required bool: must be True or False (not None / missing)
-        if attrs.get("spayed_neutered", None) is None:
-            errors["spayed_neutered"] = "This field is required."
+        # spayed_neutered is optional (null = unknown)
 
-        age_years = attrs.get("age_years")
-        birthdate = attrs.get("birthdate")
-
-        # require at least one of age_years or birthdate
-        if age_years is None and birthdate is None:
-            errors["age_years"] = "Provide age_years or birthdate."
-            errors["birthdate"] = "Provide age_years or birthdate."
-
-        # optional: sanity check age
-        if age_years is not None and age_years > 40:
-            errors["age_years"] = "Unrealistic age_years (max 40)."
+        if attrs.get("birthdate") is None:
+            errors["birthdate"] = "Birthdate is required."
 
         if errors:
             raise serializers.ValidationError(errors)

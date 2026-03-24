@@ -13,7 +13,7 @@ class Pet(models.Model):
         UNKNOWN = "unknown", "Unknown"
 
     name = models.CharField(max_length=100)
-    photo_url = models.URLField(blank=True)
+    photo = models.ImageField(upload_to='pet_photos/', blank=True, null=True)
 
     species = models.CharField(max_length=10, choices=Species.choices)
     breed_text = models.CharField(max_length=100, blank=True)

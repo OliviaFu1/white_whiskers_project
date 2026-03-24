@@ -1,7 +1,7 @@
 class Pet {
-  final String id;
+  final int id;
   final String name;
-  final String imageUrl;
+  final String? photoUrl;
 
-  Pet({required this.id, required this.name, required this.imageUrl});
+  Pet({required this.id, required this.name, this.photoUrl});
 }

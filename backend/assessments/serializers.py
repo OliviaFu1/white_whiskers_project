@@ -14,6 +14,7 @@ class PetAssessmentSerializer(serializers.ModelSerializer):
             "answers",
             "heart_score",
             "condition_score",
+            "significantly_challenged",
             "submitted_at",
         ]
         read_only_fields = ["id", "owner", "submitted_at"]

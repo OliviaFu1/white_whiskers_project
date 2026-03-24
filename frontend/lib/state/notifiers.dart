@@ -7,18 +7,17 @@ import 'package:frontend/pages/repositories/notification_repository.dart';
 import 'package:frontend/pages/repositories/pet_repository.dart';
 import 'package:frontend/services/api_client.dart';
 
-// final Pet _defaultPet = Pet(
-//   id: '0',
-//   name: 'Sausage',
-//   imageUrl: 'assets/images/test_pet.jpg',
-// );
 
 Future<void> loadPets() async {
   final pets = await petRepository.fetchPets();
 
   petsNotifier.value = pets;
 
-  if (pets.isNotEmpty) {
+  if (pets.isEmpty) return;
+
+  final currentId = selectedPetNotifier.value?.id;
+  final stillExists = currentId != null && pets.any((p) => p.id == currentId);
+  if (!stillExists) {
     selectedPetNotifier.value = pets.first;
   }
 }
@@ -51,4 +50,4 @@ NotificationRepository? notificationRepository;
 final userNotifier = ValueNotifier<User?>(null);
 final petsNotifier = ValueNotifier<List<Pet>>([]);
 final ValueNotifier<Pet?> selectedPetNotifier = ValueNotifier<Pet?>(null);
-final PetRepository petRepository = FakePetRepository();
+final PetRepository petRepository = RealPetRepository();

@@ -3,7 +3,13 @@ from rest_framework.parsers import MultiPartParser
 from rest_framework.response import Response
 from django.contrib.auth import get_user_model
 
-from .serializers import UserRegisterSerializer, UserPublicSerializer, UserMeUpdateSerializer
+from .serializers import (
+    UserRegisterSerializer,
+    UserPublicSerializer,
+    UserMeUpdateSerializer,
+    ChangeEmailSerializer,
+    ChangePasswordSerializer,
+)
 
 User = get_user_model()
 
@@ -21,7 +27,7 @@ class RegisterView(generics.CreateAPIView):
         return Response(data, status=status.HTTP_201_CREATED)
 
 
-class MeView(generics.RetrieveUpdateAPIView):
+class MeView(generics.RetrieveUpdateDestroyAPIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def get_object(self):
@@ -41,6 +47,33 @@ class MeView(generics.RetrieveUpdateAPIView):
     def retrieve(self, request, *args, **kwargs):
         serializer = UserPublicSerializer(self.get_object(), context={'request': request})
         return Response(serializer.data)
+
+    def delete(self, request, *args, **kwargs):
+        user = self.get_object()
+        user.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+class ChangeEmailView(generics.GenericAPIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def patch(self, request, *args, **kwargs):
+        serializer = ChangeEmailSerializer(data=request.data, context={'request': request})
+        serializer.is_valid(raise_exception=True)
+        request.user.email = serializer.validated_data['new_email']
+        request.user.save()
+        return Response({'detail': 'Email updated successfully.'})
+
+
+class ChangePasswordView(generics.GenericAPIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def patch(self, request, *args, **kwargs):
+        serializer = ChangePasswordSerializer(data=request.data, context={'request': request})
+        serializer.is_valid(raise_exception=True)
+        request.user.set_password(serializer.validated_data['new_password'])
+        request.user.save()
+        return Response({'detail': 'Password updated successfully.'})
 
 
 class PhotoUploadView(generics.UpdateAPIView):
