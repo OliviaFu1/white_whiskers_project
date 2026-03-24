@@ -93,7 +93,11 @@ class _CalendarPageState extends State<CalendarPage> {
                   WidgetsBinding.instance.addPostFrameCallback((_) async {
                     final changed = await Navigator.of(context).push<bool>(
                       MaterialPageRoute(
-                        builder: (_) => DayDetailsPage(date: selected),
+                        builder: (_) => DayDetailsPage(
+                          date: selected,
+                          petId: selectedPetNotifier.value?.id,
+                          petName: selectedPetNotifier.value?.name,
+                        ),
                       ),
                     );
 
@@ -141,7 +145,11 @@ class _CalendarPageState extends State<CalendarPage> {
                 onTap: () async {
                   final changed = await Navigator.of(context).push<bool>(
                     MaterialPageRoute(
-                      builder: (_) => DailyCheckinPage(date: DateTime.now()),
+                      builder: (_) => DailyCheckinPage(
+                        date: DateTime.now(),
+                        showAllPets: true,
+                        initialPetId: selectedPetNotifier.value?.id,
+                      ),
                     ),
                   );
                   if (changed == true) {

@@ -1,5 +1,10 @@
 import 'dart:convert';
+import 'package:frontend/config.dart';
+
 import 'api_client.dart';
+import 'package:http/http.dart' as http;
+import 'package:http_parser/http_parser.dart';
+import 'package:frontend/services/token_store.dart';
 
 class CalendarApi {
   static Future<List<Map<String, dynamic>>> listDailyCheckins({
@@ -31,7 +36,7 @@ class CalendarApi {
     required int petId,
     String? date,
     String? tag,
-    String? visibility, // shared|private
+    String? visibility,
   }) async {
     final qp = <String, String>{"pet_id": petId.toString()};
     if (date != null) qp["date"] = date;
@@ -100,6 +105,56 @@ class CalendarApi {
           "Failed to create journal entry (${res.statusCode})";
     }
     return jsonDecode(res.body) as Map<String, dynamic>;
+  }
+
+  static Future<String> uploadJournalPhoto(
+    String imagePath, {
+    String mimeType = 'image/jpeg',
+  }) async {
+    final access = await TokenStore.readAccess();
+    if (access == null) {
+      throw "No access token found.";
+    }
+
+    final uri = Uri.parse(
+      "${AppConfig.apiBaseUrl}/api/calendar/journal-upload-photo/",
+    );
+
+    final request = http.MultipartRequest("POST", uri);
+    request.headers["Authorization"] = "Bearer $access";
+
+    final mimeParts = mimeType.split("/");
+    final mediaType = mimeParts.length == 2
+        ? MediaType(mimeParts[0], mimeParts[1])
+        : MediaType("image", "jpeg");
+
+    request.files.add(
+      await http.MultipartFile.fromPath(
+        "photo",
+        imagePath,
+        contentType: mediaType,
+      ),
+    );
+
+    final streamed = await request.send();
+    final res = await http.Response.fromStream(streamed);
+
+    if (res.statusCode < 200 || res.statusCode >= 300) {
+      throw _extractError(res.body) ??
+          "Failed to upload journal photo (${res.statusCode})";
+    }
+
+    final decoded = jsonDecode(res.body);
+    if (decoded is! Map<String, dynamic>) {
+      throw "Unexpected upload-photo response format";
+    }
+
+    final photoUrl = decoded["photo_url"]?.toString() ?? "";
+    if (photoUrl.isEmpty) {
+      throw "photo_url missing in upload response";
+    }
+
+    return photoUrl;
   }
 
   static String? _extractError(String body) {

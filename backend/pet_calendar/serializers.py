@@ -58,3 +58,6 @@ class JournalEntrySerializer(serializers.ModelSerializer):
             "created_at",
             "updated_at",
         ]
+
+class JournalPhotoUploadSerializer(serializers.Serializer):
+    photo = serializers.ImageField(required=True)

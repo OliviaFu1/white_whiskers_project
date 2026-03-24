@@ -51,12 +51,6 @@ class JournalEntry(models.Model):
         SHARED = "shared", "Shared"
         PRIVATE = "private", "Private"
 
-    class Tag(models.TextChoices):
-        FOOD = "food", "Food"
-        SLEEP = "sleep", "Sleep"
-        MED = "med", "Medication"
-        SYMPTOMS = "symptoms", "Symptoms"
-
     pet = models.ForeignKey(
         "pets.Pet",
         on_delete=models.CASCADE,
@@ -82,8 +76,7 @@ class JournalEntry(models.Model):
         db_index=True,
     )
     tag = models.CharField(
-        max_length=16,
-        choices=Tag.choices,
+        max_length=32,
         blank=True,
         default="",
         db_index=True,

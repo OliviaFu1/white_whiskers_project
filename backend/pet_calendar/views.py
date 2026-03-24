@@ -1,9 +1,17 @@
+import os
+import uuid
 from django.db.models import Q
 from django.utils.dateparse import parse_date
+from django.conf import settings
+from django.core.files.storage import default_storage
+
 from rest_framework import viewsets, permissions
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from rest_framework import status
 
 from .models import DailyCheckin, JournalEntry
-from .serializers import DailyCheckinSerializer, JournalEntrySerializer
+from .serializers import DailyCheckinSerializer, JournalEntrySerializer, JournalPhotoUploadSerializer
 from .permissions import JournalVisibilityPermission, IsAuthorForWriteOtherwiseReadOnly
 
 
@@ -60,3 +68,26 @@ class JournalEntryViewSet(viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         serializer.save(author=self.request.user)
+
+
+class UploadJournalPhotoView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request):
+        serializer = JournalPhotoUploadSerializer(data=request.data)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+        photo = serializer.validated_data["photo"]
+        ext = os.path.splitext(photo.name)[1] or ".jpg"
+        filename = f"journal_photos/{uuid.uuid4().hex}{ext}"
+
+        saved_path = default_storage.save(filename, photo)
+        photo_url = request.build_absolute_uri(settings.MEDIA_URL + saved_path)
+
+        return Response(
+            {
+                "photo_url": photo_url,
+            },
+            status=status.HTTP_200_OK,
+        )
