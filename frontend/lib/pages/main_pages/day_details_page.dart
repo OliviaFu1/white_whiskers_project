@@ -115,6 +115,9 @@ class _DayDetailsPageState extends State<DayDetailsPage> {
   Future<void> _openAddCheckin() async {
     if (_isFuture(_currentDay)) return;
 
+    final proceed = await _confirmOldCheckinIfNeeded();
+    if (!proceed || !mounted) return;
+
     final changed = await Navigator.of(context).push<bool>(
       MaterialPageRoute(
         builder: (_) => DailyCheckinPage(
@@ -187,35 +190,32 @@ class _DayDetailsPageState extends State<DayDetailsPage> {
               );
             }
 
-            return RefreshIndicator(
-              onRefresh: () => _loadForDay(_currentDay),
-              child: ListView(
-                padding: const EdgeInsets.all(16),
-                children: [
-                  Row(
-                    children: [
-                      _sectionTitle("Daily check-in"),
-                      const Spacer(),
-                      IconButton(
-                        icon: const Icon(Icons.add),
-                        color: muted,
-                        tooltip: "Add check-in",
-                        onPressed: _openAddCheckin,
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-                  _buildCheckinCard(),
+            return ListView(
+              padding: const EdgeInsets.all(16),
+              children: [
+                Row(
+                  children: [
+                    _sectionTitle("Daily check-in"),
+                    const Spacer(),
+                    IconButton(
+                      icon: const Icon(Icons.add),
+                      color: muted,
+                      tooltip: "Add check-in",
+                      onPressed: _openAddCheckin,
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                _buildCheckinCard(),
 
-                  const SizedBox(height: 16),
+                const SizedBox(height: 16),
 
-                  _sectionTitle("Journals"),
-                  const SizedBox(height: 8),
-                  ..._buildJournalCards(),
-                  if (_journals.isEmpty)
-                    _emptyCard("No journal entries for this day."),
-                ],
-              ),
+                _sectionTitle("Journals"),
+                const SizedBox(height: 8),
+                ..._buildJournalCards(),
+                if (_journals.isEmpty)
+                  _emptyCard("No journal entries for this day."),
+              ],
             );
           },
         ),
@@ -328,6 +328,42 @@ class _DayDetailsPageState extends State<DayDetailsPage> {
   String _displayAuthor(Map<String, dynamic> obj) {
     final name = (obj["author_name"] ?? "").toString().trim();
     return name;
+  }
+
+  Future<bool> _confirmOldCheckinIfNeeded() async {
+    final daysOld = _today.difference(_dateOnly(_currentDay)).inDays;
+
+    if (daysOld < 7) return true;
+
+    final shouldProceed = await showDialog<bool>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          backgroundColor: Colors.white,
+          title: const Text("Add check-in for an older day?"),
+          content: Text(
+            "This day was $daysOld days ago, so memory can be less accurate. Do you want to proceed anyway?",
+            style: const TextStyle(color: muted),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text("Cancel", style: TextStyle(color: muted)),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.of(context).pop(true),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: accent,
+                foregroundColor: Colors.white,
+              ),
+              child: const Text("Proceed"),
+            ),
+          ],
+        );
+      },
+    );
+
+    return shouldProceed == true;
   }
 
   // ------- Journal rendering -------
