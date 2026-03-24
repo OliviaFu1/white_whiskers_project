@@ -5,7 +5,15 @@ import 'package:frontend/pages/main_pages/daily_checkin_page.dart';
 
 class DayDetailsPage extends StatefulWidget {
   final DateTime date;
-  const DayDetailsPage({super.key, required this.date});
+  final int? petId;
+  final String? petName;
+
+  const DayDetailsPage({
+    super.key,
+    required this.date,
+    this.petId,
+    this.petName,
+  });
 
   @override
   State<DayDetailsPage> createState() => _DayDetailsPageState();
@@ -108,7 +116,14 @@ class _DayDetailsPageState extends State<DayDetailsPage> {
     if (_isFuture(_currentDay)) return;
 
     final changed = await Navigator.of(context).push<bool>(
-      MaterialPageRoute(builder: (_) => DailyCheckinPage(date: _currentDay)),
+      MaterialPageRoute(
+        builder: (_) => DailyCheckinPage(
+          date: _currentDay,
+          showAllPets: false,
+          petId: widget.petId,
+          petName: widget.petName,
+        ),
+      ),
     );
 
     if (changed == true) {
@@ -117,11 +132,14 @@ class _DayDetailsPageState extends State<DayDetailsPage> {
     }
   }
 
+  String get _petNameDisplay {
+    final name = (widget.petName ?? "").trim();
+    return name.isEmpty ? "Your pet" : name;
+  }
+
   // ---------- UI ----------
   @override
   Widget build(BuildContext context) {
-    final title = _fmt(_currentDay);
-
     return PopScope(
       canPop: false,
       onPopInvokedWithResult: (didPop, result) {
@@ -132,10 +150,14 @@ class _DayDetailsPageState extends State<DayDetailsPage> {
       child: Scaffold(
         backgroundColor: bg,
         appBar: AppBar(
-          title: Text(title),
           backgroundColor: bg,
           foregroundColor: muted,
-          elevation: 0,
+          title: Text(
+            "${_fmt(_currentDay)} for $_petNameDisplay",
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
+          ),
         ),
 
         body: PageView.builder(
@@ -439,6 +461,9 @@ class _DayDetailsPageState extends State<DayDetailsPage> {
   }
 
   Future<int> _getCurrentPetId() async {
+    final passedPetId = widget.petId;
+    if (passedPetId != null) return passedPetId;
+
     final petId = await PetStore.getCurrentPetId();
     if (petId == null) throw "No pet selected.";
     return petId;
