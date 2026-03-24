@@ -7,6 +7,7 @@ import 'package:frontend/state/notifiers.dart';
 import 'package:frontend/models/pet.dart';
 import '../../services/assessment_api.dart';
 import '../assessment/assessment_results.dart';
+import '../assessment/assessment_history.dart';
 import 'pet_form_page.dart';
 import 'pet_detail_page.dart';
 
@@ -210,7 +211,7 @@ class _MypetPageState extends State<MypetPage> {
           )
         else ...[
           SizedBox(
-            height: MediaQuery.sizeOf(context).height * 0.52,
+            height: MediaQuery.sizeOf(context).height * 0.46,
             child: PageView.builder(
               controller: _pageController,
               onPageChanged: _onPageChanged,
@@ -227,6 +228,8 @@ class _MypetPageState extends State<MypetPage> {
                       _petCard(pet),
                       const SizedBox(height: 14),
                       _historyCard(pet, assessment, isLoading),
+                      const SizedBox(height: 8),
+                      _buildHistoryLink(pet),
                     ],
                   ),
                 );
@@ -622,6 +625,45 @@ class _MypetPageState extends State<MypetPage> {
                 size: 28,
               ),
             ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildHistoryLink(Map<String, dynamic>? pet) {
+    if (pet == null) return const SizedBox.shrink();
+
+    final petId = pet["id"] as int?;
+    final petName = (pet["name"] ?? "").toString().trim();
+
+    if (petId == null) return const SizedBox.shrink();
+
+    return Center(
+      child: InkWell(
+        borderRadius: BorderRadius.circular(10),
+        onTap: () async {
+          await Navigator.of(context).push(
+            MaterialPageRoute(
+              builder: (_) => AssessmentHistoryPage(
+                petId: petId,
+                petName: petName.isEmpty ? "Your pet" : petName,
+              ),
+            ),
+          );
+
+          if (!mounted) return;
+          await _loadLatestAssessment(petId);
+        },
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+          child: const Text(
+            "See previous assessments",
+            style: TextStyle(
+              fontSize: 14,
+              color: muted,
+              fontWeight: FontWeight.w600,
+            ),
           ),
         ),
       ),
