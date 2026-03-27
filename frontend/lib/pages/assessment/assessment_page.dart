@@ -24,6 +24,9 @@ class _AssessmentPageState extends State<AssessmentPage> {
   int _currentPage = 0;
 
   bool _isSubmitting = false;
+  bool _isLoadingPrevious = true;
+
+  Map<String, dynamic>? _previousAnswers;
 
   final Map<String, dynamic> _answers = {
     "favorite_pet_things": <String>["", "", ""],
@@ -72,10 +75,72 @@ class _AssessmentPageState extends State<AssessmentPage> {
         (_) => {"label": "", "status": ""},
       );
     }
+
+    _loadPreviousAssessment();
+  }
+
+  Future<void> _loadPreviousAssessment() async {
+    try {
+      final latest = await AssessmentApi.getLatestAssessment(
+        petId: widget.petId,
+      );
+      final rawAnswers = latest?["answers"];
+
+      if (rawAnswers is Map) {
+        _previousAnswers = Map<String, dynamic>.from(rawAnswers);
+        _prefillInitializeAnswersFromPrevious();
+      }
+    } catch (_) {
+      // no-op
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoadingPrevious = false;
+        });
+      }
+    }
+  }
+
+  void _prefillInitializeAnswersFromPrevious() {
+    if (_previousAnswers == null) return;
+
+    void copyKey(String key) {
+      if (!_previousAnswers!.containsKey(key)) return;
+      final value = _previousAnswers![key];
+
+      if (value is List) {
+        _answers[key] = value.map((e) => e.toString()).toList();
+      } else if (value is Map) {
+        _answers[key] = Map<String, dynamic>.from(value);
+      } else {
+        _answers[key] = value;
+      }
+    }
+
+    copyKey("favorite_pet_things");
+    copyKey("favorite_shared_things");
+    copyKey("biggest_concerns");
+    copyKey("other_concern_text");
+    copyKey("concerns_expand");
+    copyKey("concern_duration");
+    copyKey("last_30_days");
+    copyKey("boundaries");
+    copyKey("preference_info");
+    copyKey("which_best_describes_you");
+    copyKey("pet_tolerance");
+    copyKey("medicine_success");
+
+    _syncJoyItemsFromFavorites();
   }
 
   List<_AssessmentStep> _buildSteps() {
     return [
+      _AssessmentStep(
+        id: "overview",
+        title: "New Assessment for ${widget.petName}",
+        description: null,
+        builder: _buildOverviewStep,
+      ),
       _AssessmentStep(
         id: "intro_favorites",
         title: "In Your Words...",
@@ -177,27 +242,173 @@ class _AssessmentPageState extends State<AssessmentPage> {
     ];
   }
 
+  int _indexOfStep(String id) => _steps.indexWhere((s) => s.id == id);
+
+  void _jumpToStep(String id) {
+    final index = _indexOfStep(id);
+    if (index < 0) return;
+    FocusScope.of(context).unfocus();
+    _pageController.jumpToPage(index);
+  }
+
   void _goNext() {
     if (_currentPage >= _steps.length - 1) return;
     FocusScope.of(context).unfocus();
-    _pageController.nextPage(
-      duration: const Duration(milliseconds: 220),
-      curve: Curves.easeOut,
-    );
+    _pageController.jumpToPage(_currentPage + 1);
   }
 
   void _goBack() {
     if (_currentPage <= 0) return;
     FocusScope.of(context).unfocus();
-    _pageController.previousPage(
-      duration: const Duration(milliseconds: 220),
-      curve: Curves.easeOut,
-    );
+    _pageController.jumpToPage(_currentPage - 1);
   }
 
-  double get _progress {
-    if (_steps.isEmpty) return 0;
-    return (_currentPage + 1) / _steps.length;
+  String get _nextButtonLabel {
+    final stepId = _steps[_currentPage].id;
+    if (stepId == "overview") return "Review Results";
+    if (stepId == "results") return "Save Assessment";
+    return "Next";
+  }
+
+  bool get _isNextEnabled {
+    if (_isSubmitting) return false;
+
+    final stepId = _steps[_currentPage].id;
+    if (stepId == "overview") return _isReadyForReview;
+
+    return _isCurrentStepValid();
+  }
+
+  bool get _showProgressBar {
+    final id = _steps[_currentPage].id;
+    return id != "overview" && id != "results";
+  }
+
+  static const List<String> _initializeStepIds = [
+    "intro_favorites",
+    "concerns",
+    "boundaries",
+    "describe_yourself",
+    "describe_pet",
+  ];
+
+  static const List<String> _updateStepIds = [
+    "physical_condition",
+    "appetite",
+    "water_intake",
+    "mobility",
+    "hygiene",
+    "state_of_mind",
+    "joy",
+    "owner_state",
+  ];
+
+  List<_AssessmentStep> get _initializeStepsOnly =>
+      _steps.where((s) => _initializeStepIds.contains(s.id)).toList();
+
+  List<_AssessmentStep> get _updateStepsOnly =>
+      _steps.where((s) => _updateStepIds.contains(s.id)).toList();
+
+  String get _currentPartTitle {
+    final id = _steps[_currentPage].id;
+    if (_initializeStepIds.contains(id)) return "Part 1 of 2";
+    if (_updateStepIds.contains(id)) return "Part 2 of 2";
+    return "";
+  }
+
+  String get _currentPartSubtitle {
+    final id = _steps[_currentPage].id;
+    if (_initializeStepIds.contains(id)) return "Background & Preferences";
+    if (_updateStepIds.contains(id)) return "Recent Quality of Life";
+    return "";
+  }
+
+  double get _partProgress {
+    final id = _steps[_currentPage].id;
+
+    if (_initializeStepIds.contains(id)) {
+      final idx = _initializeStepsOnly.indexWhere((s) => s.id == id);
+      if (idx < 0) return 0;
+      return (idx + 1) / _initializeStepsOnly.length;
+    }
+
+    if (_updateStepIds.contains(id)) {
+      final idx = _updateStepsOnly.indexWhere((s) => s.id == id);
+      if (idx < 0) return 0;
+      return (idx + 1) / _updateStepsOnly.length;
+    }
+
+    return 0;
+  }
+
+  String get _partProgressText {
+    final id = _steps[_currentPage].id;
+
+    if (_initializeStepIds.contains(id)) {
+      final idx = _initializeStepsOnly.indexWhere((s) => s.id == id);
+      if (idx < 0) return "";
+      return "${idx + 1}/${_initializeStepsOnly.length}";
+    }
+
+    if (_updateStepIds.contains(id)) {
+      final idx = _updateStepsOnly.indexWhere((s) => s.id == id);
+      if (idx < 0) return "";
+      return "${idx + 1}/${_updateStepsOnly.length}";
+    }
+
+    return "";
+  }
+
+  bool get _hasPreviousInitializeData => _previousAnswers != null;
+
+  bool get _hasStartedUpdatePart {
+    return [
+      "physical_score",
+      "appetite_score",
+      "hydration_score",
+      "mobility_score",
+      "cleanliness_score",
+      "state_of_mind_score",
+      "owner_state_score",
+      "food_relationship",
+      "joy_explanation",
+    ].any(_hasCurrentValue);
+  }
+
+  String get _startAssessmentTarget =>
+      _hasPreviousInitializeData ? "physical_condition" : "intro_favorites";
+
+  dynamic _prev(String key) => _previousAnswers?[key];
+
+  String _prevText(String key) {
+    final v = _prev(key);
+    if (v == null) return "";
+    return v.toString().trim();
+  }
+
+  int? _prevInt(String key) {
+    final v = _prev(key);
+    if (v is int) return v;
+    if (v is num) return v.toInt();
+    return null;
+  }
+
+  bool _hasCurrentValue(String key) {
+    final v = _answers[key];
+    if (v == null) return false;
+    if (v is String) return v.trim().isNotEmpty;
+    if (v is List) return v.isNotEmpty;
+    return true;
+  }
+
+  String _previousScoreText(String scoreKey, String explanationKey) {
+    final score = _prevInt(scoreKey);
+    if (score == null) return "";
+
+    final explanation = _prevText(explanationKey);
+    if (explanation.isEmpty) return "$score / 10";
+
+    return "$score / 10 ($explanation)";
   }
 
   List<String> _favoriteThingsAll() {
@@ -214,15 +425,8 @@ class _AssessmentPageState extends State<AssessmentPage> {
 
   void _syncJoyItemsFromFavorites() {
     final all = _favoriteThingsAll();
-    final current = _answers["joy_items"] as List<Map<String, dynamic>>;
     _answers["joy_items"] = List.generate(5, (index) {
-      final existingStatus = index < current.length
-          ? (current[index]["status"] ?? "").toString()
-          : "";
-      return {
-        "label": index < all.length ? all[index] : "",
-        "status": existingStatus,
-      };
+      return {"label": index < all.length ? all[index] : "", "status": ""};
     });
   }
 
@@ -352,8 +556,9 @@ class _AssessmentPageState extends State<AssessmentPage> {
         score >= 30 && score <= 90 && _hasSignificantlyChallengedFlag();
 
     if (score < 30) return "Condition Score Range: <30";
-    if (challenged)
+    if (challenged) {
       return "Condition Score Range: 30-90, but significantly challenged";
+    }
     if (score > 60) return "Condition Score Range: >60";
     return "Condition Score Range: 30-60";
   }
@@ -471,6 +676,148 @@ class _AssessmentPageState extends State<AssessmentPage> {
     }
   }
 
+  bool get _isInitializePartComplete {
+    final petThings = (_answers["favorite_pet_things"] as List)
+        .map((e) => e.toString().trim())
+        .toList();
+
+    final sharedThings = (_answers["favorite_shared_things"] as List)
+        .map((e) => e.toString().trim())
+        .toList();
+
+    final concerns = (_answers["biggest_concerns"] as List)
+        .map((e) => e.toString().trim())
+        .toList();
+
+    final needsOther = concerns.contains("Other");
+
+    return petThings.every((e) => e.isNotEmpty) &&
+        sharedThings.every((e) => e.isNotEmpty) &&
+        concerns.isNotEmpty &&
+        (!needsOther ||
+            (_answers["other_concern_text"] ?? "")
+                .toString()
+                .trim()
+                .isNotEmpty) &&
+        (_answers["concerns_expand"] ?? "").toString().trim().isNotEmpty &&
+        (_answers["concern_duration"] ?? "").toString().trim().isNotEmpty &&
+        (_answers["last_30_days"] ?? "").toString().trim().isNotEmpty &&
+        (_answers["boundaries"] ?? "").toString().trim().isNotEmpty &&
+        (_answers["preference_info"] ?? "").toString().trim().isNotEmpty &&
+        (_answers["which_best_describes_you"] ?? "")
+            .toString()
+            .trim()
+            .isNotEmpty &&
+        (_answers["pet_tolerance"] ?? "").toString().trim().isNotEmpty &&
+        (_answers["medicine_success"] ?? "").toString().trim().isNotEmpty;
+  }
+
+  bool get _isReadyForReview =>
+      _isInitializePartComplete && _isUpdatePartComplete;
+
+  bool get _isUpdatePartComplete {
+    final joyItems = _answers["joy_items"] as List<Map<String, dynamic>>;
+
+    final joyDone = joyItems.every(
+      (e) => ((e["status"] ?? "").toString().trim().isNotEmpty),
+    );
+
+    return (_answers["physical_score"] as int?) != null &&
+        (_answers["appetite_score"] as int?) != null &&
+        (_answers["hydration_score"] as int?) != null &&
+        (_answers["mobility_score"] as int?) != null &&
+        (_answers["cleanliness_score"] as int?) != null &&
+        (_answers["state_of_mind_score"] as int?) != null &&
+        (_answers["owner_state_score"] as int?) != null &&
+        (_answers["food_relationship"] ?? "").toString().trim().isNotEmpty &&
+        joyDone;
+  }
+
+  bool _isCurrentStepValid() {
+    final stepId = _steps[_currentPage].id;
+
+    switch (stepId) {
+      case "overview":
+        return _isUpdatePartComplete;
+
+      case "intro_favorites":
+        final petThings = (_answers["favorite_pet_things"] as List)
+            .map((e) => e.toString().trim())
+            .toList();
+        final sharedThings = (_answers["favorite_shared_things"] as List)
+            .map((e) => e.toString().trim())
+            .toList();
+        return petThings.every((e) => e.isNotEmpty) &&
+            sharedThings.every((e) => e.isNotEmpty);
+
+      case "concerns":
+        final selected = (_answers["biggest_concerns"] as List)
+            .map((e) => e.toString())
+            .toList();
+        final needsOther = selected.contains("Other");
+        return selected.isNotEmpty &&
+            (!needsOther ||
+                (_answers["other_concern_text"] ?? "")
+                    .toString()
+                    .trim()
+                    .isNotEmpty) &&
+            (_answers["concerns_expand"] ?? "").toString().trim().isNotEmpty &&
+            (_answers["concern_duration"] ?? "").toString().trim().isNotEmpty &&
+            (_answers["last_30_days"] ?? "").toString().trim().isNotEmpty;
+
+      case "boundaries":
+        return (_answers["boundaries"] ?? "").toString().trim().isNotEmpty;
+
+      case "describe_yourself":
+        return (_answers["preference_info"] ?? "")
+                .toString()
+                .trim()
+                .isNotEmpty &&
+            (_answers["which_best_describes_you"] ?? "")
+                .toString()
+                .trim()
+                .isNotEmpty;
+
+      case "describe_pet":
+        return (_answers["pet_tolerance"] ?? "").toString().trim().isNotEmpty &&
+            (_answers["medicine_success"] ?? "").toString().trim().isNotEmpty;
+
+      case "physical_condition":
+        return (_answers["physical_score"] as int?) != null;
+
+      case "appetite":
+        return (_answers["appetite_score"] as int?) != null &&
+            (_answers["food_relationship"] ?? "").toString().trim().isNotEmpty;
+
+      case "water_intake":
+        return (_answers["hydration_score"] as int?) != null;
+
+      case "mobility":
+        return (_answers["mobility_score"] as int?) != null;
+
+      case "hygiene":
+        return (_answers["cleanliness_score"] as int?) != null;
+
+      case "state_of_mind":
+        return (_answers["state_of_mind_score"] as int?) != null;
+
+      case "joy":
+        final joyItems = _answers["joy_items"] as List<Map<String, dynamic>>;
+        return joyItems.every(
+          (e) => ((e["status"] ?? "").toString().trim().isNotEmpty),
+        );
+
+      case "owner_state":
+        return (_answers["owner_state_score"] as int?) != null;
+
+      case "results":
+        return true;
+
+      default:
+        return true;
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -480,14 +827,27 @@ class _AssessmentPageState extends State<AssessmentPage> {
         backgroundColor: const Color(0xFFFAF7F5),
         elevation: 0,
         scrolledUnderElevation: 0,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back),
+          onPressed: () {
+            if (_currentPage == 0) {
+              Navigator.of(context).pop();
+            } else {
+              _jumpToStep("overview");
+            }
+          },
+        ),
       ),
       body: SafeArea(
         child: Column(
           children: [
-            _TopProgressBar(
-              progress: _progress,
-              percentText: "${(_progress * 100).round()}%",
-            ),
+            if (_showProgressBar)
+              _TopProgressBar(
+                progress: _partProgress,
+                percentText: _partProgressText,
+                partTitle: _currentPartTitle,
+                partSubtitle: _currentPartSubtitle,
+              ),
             Expanded(
               child: PageView.builder(
                 controller: _pageController,
@@ -514,23 +874,89 @@ class _AssessmentPageState extends State<AssessmentPage> {
             ),
             _BottomNavBar(
               canGoBack: _currentPage > 0,
-              isLast: _currentPage == _steps.length - 1,
+              isLast: _steps[_currentPage].id == "results",
               isLoading: _isSubmitting,
-              onBack: _goBack,
+              nextLabel: _nextButtonLabel,
+              nextEnabled: _isNextEnabled,
+              onBack: () {
+                if (_currentPage == 0) return;
+                _goBack();
+              },
               onNext: () {
-                if (_currentPage == _steps.length - 1) {
-                  _submitAssessment();
-                } else {
-                  if (_steps[_currentPage].id == "intro_favorites") {
-                    _syncJoyItemsFromFavorites();
+                final stepId = _steps[_currentPage].id;
+
+                if (stepId == "overview") {
+                  if (_isReadyForReview) {
+                    _jumpToStep("results");
                   }
-                  _goNext();
+                  return;
                 }
+
+                if (stepId == "results") {
+                  _submitAssessment();
+                  return;
+                }
+
+                if (stepId == "intro_favorites") {
+                  _syncJoyItemsFromFavorites();
+                }
+
+                if (stepId == "owner_state") {
+                  _jumpToStep("overview");
+                  return;
+                }
+
+                _goNext();
               },
             ),
           ],
         ),
       ),
+    );
+  }
+
+  Widget _buildOverviewStep(BuildContext context) {
+    if (_isLoadingPrevious) {
+      return const Padding(
+        padding: EdgeInsets.only(top: 40),
+        child: Center(child: CircularProgressIndicator()),
+      );
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          "This assessment has two parts. Background and preferences can be reviewed and edited. Recent condition and quality of life should be filled in fresh.",
+          style: TextStyle(fontSize: 15, height: 1.5, color: Color(0xFF6A5B52)),
+        ),
+        const SizedBox(height: 24),
+        _SectionCard(
+          title: "Background & Preferences",
+          subtitle: _hasPreviousInitializeData
+              ? "Saved from previous assessment"
+              : "Needs setup",
+          trailingLabel: "Edit",
+          statusColor: _hasPreviousInitializeData
+              ? const Color(0xFF2E8B57)
+              : const Color(0xFFD88442),
+          onTap: () => _jumpToStep("intro_favorites"),
+        ),
+        const SizedBox(height: 14),
+        _SectionCard(
+          title: "Recent Quality of Life",
+          subtitle: _hasStartedUpdatePart
+              ? (_isUpdatePartComplete ? "Ready to submit" : "In progress")
+              : "Needs input",
+          trailingLabel: _hasStartedUpdatePart ? "Edit" : "Start",
+          statusColor: _isUpdatePartComplete
+              ? const Color(0xFF2E8B57)
+              : _hasStartedUpdatePart
+              ? const Color(0xFFD88442)
+              : const Color(0xFF8C6F61),
+          onTap: () => _jumpToStep(_startAssessmentTarget),
+        ),
+      ],
     );
   }
 
@@ -547,7 +973,9 @@ class _AssessmentPageState extends State<AssessmentPage> {
           _TextAnswerField(
             initialValue: petThings[i],
             hintText: "Favorite thing ${i + 1}",
-            onChanged: (v) => petThings[i] = v,
+            onChanged: (v) => setState(() {
+              petThings[i] = v;
+            }),
           ),
           const SizedBox(height: 12),
         ],
@@ -560,7 +988,9 @@ class _AssessmentPageState extends State<AssessmentPage> {
           _TextAnswerField(
             initialValue: sharedThings[i],
             hintText: "Shared favorite ${i + 1}",
-            onChanged: (v) => sharedThings[i] = v,
+            onChanged: (v) => setState(() {
+              sharedThings[i] = v;
+            }),
           ),
           const SizedBox(height: 12),
         ],
@@ -643,7 +1073,9 @@ class _AssessmentPageState extends State<AssessmentPage> {
           initialValue: _answers["boundaries"],
           minLines: 6,
           maxLines: 8,
-          onChanged: (v) => _answers["boundaries"] = v,
+          onChanged: (v) => setState(() {
+            _answers["boundaries"] = v;
+          }),
         ),
       ],
     );
@@ -729,6 +1161,7 @@ class _AssessmentPageState extends State<AssessmentPage> {
 
   Widget _buildPhysicalConditionStep(BuildContext context) {
     final int? score = _answers["physical_score"] as int?;
+    final int? previousScore = _prevInt("physical_score");
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -743,6 +1176,13 @@ class _AssessmentPageState extends State<AssessmentPage> {
               "For reference and consideration (rated most important to least):\n- Respiration (Breathing)\n- Pain (Difficult to assess in stoic pets)\n- Tumors/Cancer\n- Wounds/Infections",
           onChanged: (v) => setState(() => _answers["physical_score"] = v),
         ),
+        if (score != null && previousScore != null) ...[
+          const SizedBox(height: 10),
+          _PreviousAnswerNote(
+            label: "Previous score",
+            value: _previousScoreText("physical_score", "physical_explanation"),
+          ),
+        ],
         if (score != null && score <= 5)
           _helperText(
             "An inability to properly breathe should be considered a veterinary emergency. If you feel that ${widget.petName} is having labored breathing, please call us right away or reach out to your nearest emergency veterinary clinic.\n\n"
@@ -768,6 +1208,7 @@ class _AssessmentPageState extends State<AssessmentPage> {
 
   Widget _buildAppetiteStep(BuildContext context) {
     final int? score = _answers["appetite_score"] as int?;
+    final int? previousScore = _prevInt("appetite_score");
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -781,6 +1222,13 @@ class _AssessmentPageState extends State<AssessmentPage> {
               "Abnormal appetite could mean excessive hunger or refusal to eat.",
           onChanged: (v) => setState(() => _answers["appetite_score"] = v),
         ),
+        if (score != null && previousScore != null) ...[
+          const SizedBox(height: 10),
+          _PreviousAnswerNote(
+            label: "Previous score",
+            value: _previousScoreText("appetite_score", "appetite_explanation"),
+          ),
+        ],
         if (score != null)
           _helperText(
             "It's important to understand the limitations of this metric. There are animals whose food motivation transcends the greatest of discomforts and there are animals who stop eating for reasons that we may be able to address. In either case, we begin with a conversation and from there seek to give you the best guidance we can to access exactly the kind of care that ${widget.petName} needs.",
@@ -813,6 +1261,7 @@ class _AssessmentPageState extends State<AssessmentPage> {
 
   Widget _buildHydrationStep(BuildContext context) {
     final int? score = _answers["hydration_score"] as int?;
+    final int? previousScore = _prevInt("hydration_score");
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -827,6 +1276,16 @@ class _AssessmentPageState extends State<AssessmentPage> {
               "Abnormal water intake could mean excessive thirst or refusal to drink.",
           onChanged: (v) => setState(() => _answers["hydration_score"] = v),
         ),
+        if (score != null && previousScore != null) ...[
+          const SizedBox(height: 10),
+          _PreviousAnswerNote(
+            label: "Previous score",
+            value: _previousScoreText(
+              "hydration_score",
+              "hydration_explanation",
+            ),
+          ),
+        ],
         if (score != null)
           _helperText(
             "Our pets can unexpectedly start drinking excess water or very little water for a variety of reasons. Sudden changes in whether the water bowl empties too quickly or doesn't empty at all can give us hints about what's going on internally with ${widget.petName}. Likewise, sudden, consistent changes to ${widget.petName}'s urine output can give us a snapshot of their kidney health. Like with our appetite, drinking too much can be as much of a signifier that something is wrong as drinking too little. Don't worry, we'll figure it out together.",
@@ -849,6 +1308,7 @@ class _AssessmentPageState extends State<AssessmentPage> {
 
   Widget _buildMobilityStep(BuildContext context) {
     final int? score = _answers["mobility_score"] as int?;
+    final int? previousScore = _prevInt("mobility_score");
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -860,6 +1320,13 @@ class _AssessmentPageState extends State<AssessmentPage> {
           rightLabel: "10 (best)",
           onChanged: (v) => setState(() => _answers["mobility_score"] = v),
         ),
+        if (score != null && previousScore != null) ...[
+          const SizedBox(height: 10),
+          _PreviousAnswerNote(
+            label: "Previous score",
+            value: _previousScoreText("mobility_score", "mobility_explanation"),
+          ),
+        ],
         const SizedBox(height: 24),
         _FieldTitle(
           "Mobility Score Explanation",
@@ -878,6 +1345,7 @@ class _AssessmentPageState extends State<AssessmentPage> {
 
   Widget _buildCleanlinessStep(BuildContext context) {
     final int? score = _answers["cleanliness_score"] as int?;
+    final int? previousScore = _prevInt("cleanliness_score");
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -890,6 +1358,16 @@ class _AssessmentPageState extends State<AssessmentPage> {
           rightLabel: "10 (best)",
           onChanged: (v) => setState(() => _answers["cleanliness_score"] = v),
         ),
+        if (score != null && previousScore != null) ...[
+          const SizedBox(height: 10),
+          _PreviousAnswerNote(
+            label: "Previous score",
+            value: _previousScoreText(
+              "cleanliness_score",
+              "cleanliness_explanation",
+            ),
+          ),
+        ],
         if (score != null && score <= 5)
           _helperText(
             "As our pets age, they can lose both physical control and sensation over their ability to eliminate. This can result in an otherwise proud and disciplined pet, eliminating in the house. Mobility or cognitive challenges can also impede a senior pet's ability to alert their owner to their needs or access proper elimination locations in a timely or successful manner. This can include litterboxes that were once accessible but no longer suitable or stairs to potty spots that are now too challenging to navigate. This isn't their fault, but the challenges that they face aren't always obvious to us at first glance. If ${widget.petName} is having difficulty with elimination or hygiene, there may be things we can do to help.",
@@ -912,6 +1390,7 @@ class _AssessmentPageState extends State<AssessmentPage> {
 
   Widget _buildStateOfMindStep(BuildContext context) {
     final int? score = _answers["state_of_mind_score"] as int?;
+    final int? previousScore = _prevInt("state_of_mind_score");
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -923,6 +1402,16 @@ class _AssessmentPageState extends State<AssessmentPage> {
           rightLabel: "10 (best)",
           onChanged: (v) => setState(() => _answers["state_of_mind_score"] = v),
         ),
+        if (score != null && previousScore != null) ...[
+          const SizedBox(height: 10),
+          _PreviousAnswerNote(
+            label: "Previous score",
+            value: _previousScoreText(
+              "state_of_mind_score",
+              "state_of_mind_explanation",
+            ),
+          ),
+        ],
         if (score != null && score <= 5)
           _helperText(
             "It can be so hard to feel your pet mentally slip away from you even before they physically slip away from you. It can even test the loving bond that you've developed with your pet over the time you both have shared.\n\n"
@@ -985,6 +1474,7 @@ class _AssessmentPageState extends State<AssessmentPage> {
 
   Widget _buildOwnerStateStep(BuildContext context) {
     final int? score = _answers["owner_state_score"] as int?;
+    final int? previousScore = _prevInt("owner_state_score");
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -997,6 +1487,16 @@ class _AssessmentPageState extends State<AssessmentPage> {
           rightLabel: "10 (best)",
           onChanged: (v) => setState(() => _answers["owner_state_score"] = v),
         ),
+        if (score != null && previousScore != null) ...[
+          const SizedBox(height: 10),
+          _PreviousAnswerNote(
+            label: "Previous score",
+            value: _previousScoreText(
+              "owner_state_score",
+              "owner_state_explanation",
+            ),
+          ),
+        ],
         if (score != null && score <= 6)
           _helperText(
             "This stage of life is often the most challenging as the burden of responsibility regarding end-of-life decisions weighs heavily on an owner's shoulders. We've loved them, often for the entire length of their lives. Admitting the rigors of this phase of your relationship to others and even to oneself can riddle many people with guilt.\n\n"
@@ -1086,4 +1586,122 @@ class _OptionWithDescription {
     required this.title,
     required this.description,
   });
+}
+
+class _SectionCard extends StatelessWidget {
+  final String title;
+  final String subtitle;
+  final String trailingLabel;
+  final Color statusColor;
+  final VoidCallback onTap;
+
+  const _SectionCard({
+    required this.title,
+    required this.subtitle,
+    required this.trailingLabel,
+    required this.statusColor,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      borderRadius: BorderRadius.circular(18),
+      onTap: onTap,
+      child: Ink(
+        padding: const EdgeInsets.all(18),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: const Color(0xFFE9DDD3)),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 10,
+              height: 10,
+              decoration: BoxDecoration(
+                color: statusColor,
+                shape: BoxShape.circle,
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w700,
+                      color: Color(0xFF3E3028),
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    subtitle,
+                    style: const TextStyle(
+                      fontSize: 14,
+                      color: Color(0xFF7B6D64),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Text(
+              trailingLabel,
+              style: const TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+                color: Color(0xFFD88442),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _PreviousAnswerNote extends StatelessWidget {
+  final String label;
+  final String value;
+
+  const _PreviousAnswerNote({required this.label, required this.value});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF6F1EC),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFFE3D8CE)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            label,
+            style: const TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              color: Color(0xFF8A7769),
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            value,
+            style: const TextStyle(
+              fontSize: 14,
+              height: 1.45,
+              color: Color(0xFF5E4E45),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }

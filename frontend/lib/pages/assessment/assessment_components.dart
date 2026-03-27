@@ -3,31 +3,63 @@ part of 'assessment_page.dart';
 class _TopProgressBar extends StatelessWidget {
   final double progress;
   final String percentText;
+  final String partTitle;
+  final String partSubtitle;
 
-  const _TopProgressBar({required this.progress, required this.percentText});
+  const _TopProgressBar({
+    required this.progress,
+    required this.percentText,
+    required this.partTitle,
+    required this.partSubtitle,
+  });
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 12, 20, 8),
+    return Container(
+      padding: const EdgeInsets.fromLTRB(20, 10, 20, 14),
+      color: const Color(0xFFFAF7F5),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            percentText,
-            style: Theme.of(context).textTheme.labelLarge?.copyWith(
-              color: const Color(0xFF6F625B),
+            partTitle,
+            style: const TextStyle(
+              fontSize: 12,
               fontWeight: FontWeight.w700,
+              color: Color(0xFF8A7769),
             ),
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 2),
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  partSubtitle,
+                  style: const TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w600,
+                    color: Color(0xFF3E3028),
+                  ),
+                ),
+              ),
+              Text(
+                percentText,
+                style: const TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  color: Color(0xFF8A7769),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
           ClipRRect(
             borderRadius: BorderRadius.circular(999),
             child: LinearProgressIndicator(
-              value: progress,
               minHeight: 8,
-              backgroundColor: const Color(0xFFE7DDD7),
-              valueColor: const AlwaysStoppedAnimation(Color(0xFF8B6B5C)),
+              value: progress.clamp(0.0, 1.0),
+              backgroundColor: const Color(0xFFE9DDD3),
+              valueColor: const AlwaysStoppedAnimation(Color(0xFFD88442)),
             ),
           ),
         ],
@@ -546,6 +578,8 @@ class _BottomNavBar extends StatelessWidget {
   final bool isLoading;
   final VoidCallback onBack;
   final VoidCallback onNext;
+  final String nextLabel;
+  final bool nextEnabled;
 
   const _BottomNavBar({
     required this.canGoBack,
@@ -553,6 +587,8 @@ class _BottomNavBar extends StatelessWidget {
     required this.isLoading,
     required this.onBack,
     required this.onNext,
+    required this.nextLabel,
+    required this.nextEnabled,
   });
 
   @override
@@ -584,7 +620,7 @@ class _BottomNavBar extends StatelessWidget {
               child: SizedBox(
                 height: 50,
                 child: FilledButton(
-                  onPressed: isLoading ? null : onNext,
+                  onPressed: nextEnabled && !isLoading ? onNext : null,
                   style: FilledButton.styleFrom(
                     backgroundColor: const Color(0xFF8B6B5C),
                     shape: RoundedRectangleBorder(
@@ -597,7 +633,7 @@ class _BottomNavBar extends StatelessWidget {
                           height: 18,
                           child: CircularProgressIndicator(strokeWidth: 2),
                         )
-                      : Text(isLast ? "Done" : "Next"),
+                      : Text(nextLabel),
                 ),
               ),
             ),
