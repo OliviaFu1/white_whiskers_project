@@ -63,6 +63,10 @@ class _AssessmentPageState extends State<AssessmentPage> {
 
   List<_AssessmentStep> get _steps => _buildSteps();
 
+  // ---------------------------
+  // Lifecycle & initial loading
+  // ---------------------------
+
   @override
   void initState() {
     super.initState();
@@ -132,6 +136,35 @@ class _AssessmentPageState extends State<AssessmentPage> {
 
     _syncJoyItemsFromFavorites();
   }
+
+  // ---------------------------
+  // Step definitions & grouping
+  // ---------------------------
+
+  static const List<String> _initializeStepIds = [
+    "intro_favorites",
+    "concerns",
+    "boundaries",
+    "describe_yourself",
+    "describe_pet",
+  ];
+
+  static const List<String> _updateStepIds = [
+    "physical_condition",
+    "appetite",
+    "water_intake",
+    "mobility",
+    "hygiene",
+    "state_of_mind",
+    "joy",
+    "owner_state",
+  ];
+
+  List<_AssessmentStep> get _initializeStepsOnly =>
+      _steps.where((s) => _initializeStepIds.contains(s.id)).toList();
+
+  List<_AssessmentStep> get _updateStepsOnly =>
+      _steps.where((s) => _updateStepIds.contains(s.id)).toList();
 
   List<_AssessmentStep> _buildSteps() {
     return [
@@ -242,6 +275,10 @@ class _AssessmentPageState extends State<AssessmentPage> {
     ];
   }
 
+  // ---------------------------
+  // Navigation & step flow
+  // ---------------------------
+
   int _indexOfStep(String id) => _steps.indexWhere((s) => s.id == id);
 
   void _jumpToStep(String id) {
@@ -283,31 +320,6 @@ class _AssessmentPageState extends State<AssessmentPage> {
     final id = _steps[_currentPage].id;
     return id != "overview" && id != "results";
   }
-
-  static const List<String> _initializeStepIds = [
-    "intro_favorites",
-    "concerns",
-    "boundaries",
-    "describe_yourself",
-    "describe_pet",
-  ];
-
-  static const List<String> _updateStepIds = [
-    "physical_condition",
-    "appetite",
-    "water_intake",
-    "mobility",
-    "hygiene",
-    "state_of_mind",
-    "joy",
-    "owner_state",
-  ];
-
-  List<_AssessmentStep> get _initializeStepsOnly =>
-      _steps.where((s) => _initializeStepIds.contains(s.id)).toList();
-
-  List<_AssessmentStep> get _updateStepsOnly =>
-      _steps.where((s) => _updateStepIds.contains(s.id)).toList();
 
   String get _currentPartTitle {
     final id = _steps[_currentPage].id;
@@ -359,7 +371,29 @@ class _AssessmentPageState extends State<AssessmentPage> {
     return "";
   }
 
+  // ---------------------------
+  // Derived state & answer helpers
+  // ---------------------------
+
   bool get _hasPreviousInitializeData => _previousAnswers != null;
+
+  bool get _hasStartedInitializePart {
+    return _isInitializePartComplete ||
+        [
+          "favorite_pet_things",
+          "favorite_shared_things",
+          "biggest_concerns",
+          "other_concern_text",
+          "concerns_expand",
+          "concern_duration",
+          "last_30_days",
+          "boundaries",
+          "preference_info",
+          "which_best_describes_you",
+          "pet_tolerance",
+          "medicine_success",
+        ].any(_hasCurrentValue);
+  }
 
   bool get _hasStartedUpdatePart {
     return [
@@ -374,9 +408,6 @@ class _AssessmentPageState extends State<AssessmentPage> {
       "joy_explanation",
     ].any(_hasCurrentValue);
   }
-
-  String get _startAssessmentTarget =>
-      _hasPreviousInitializeData ? "physical_condition" : "intro_favorites";
 
   dynamic _prev(String key) => _previousAnswers?[key];
 
@@ -430,6 +461,17 @@ class _AssessmentPageState extends State<AssessmentPage> {
     });
   }
 
+  bool _joyConcern() {
+    final joyItems = _answers["joy_items"] as List<Map<String, dynamic>>;
+    if (joyItems.any((e) => ((e["status"] ?? "").toString().trim().isEmpty))) {
+      return false;
+    }
+    final noLongerEnjoysCount = joyItems
+        .where((e) => e["status"] == "No Longer Enjoys")
+        .length;
+    return noLongerEnjoysCount >= 3;
+  }
+
   Widget _helperText(String text) {
     return Container(
       width: double.infinity,
@@ -451,16 +493,9 @@ class _AssessmentPageState extends State<AssessmentPage> {
     );
   }
 
-  bool _joyConcern() {
-    final joyItems = _answers["joy_items"] as List<Map<String, dynamic>>;
-    if (joyItems.any((e) => ((e["status"] ?? "").toString().trim().isEmpty))) {
-      return false;
-    }
-    final noLongerEnjoysCount = joyItems
-        .where((e) => e["status"] == "No Longer Enjoys")
-        .length;
-    return noLongerEnjoysCount >= 3;
-  }
+  // ---------------------------
+  // Score calculation & interpretation
+  // ---------------------------
 
   int _heartScore() {
     final infoScore = _answers["preference_info"] == "More Information" ? 1 : 0;
@@ -593,88 +628,9 @@ class _AssessmentPageState extends State<AssessmentPage> {
         "Call Now: (719) 799 - 6670";
   }
 
-  Map<String, dynamic> _buildAssessmentPayload() {
-    return {
-      "pet": widget.petId,
-      "answers": {
-        "favorite_pet_things": List<String>.from(
-          _answers["favorite_pet_things"] as List,
-        ),
-        "favorite_shared_things": List<String>.from(
-          _answers["favorite_shared_things"] as List,
-        ),
-        "biggest_concerns": List<String>.from(
-          _answers["biggest_concerns"] as List,
-        ),
-        "other_concern_text": _answers["other_concern_text"],
-        "concerns_expand": _answers["concerns_expand"],
-        "concern_duration": _answers["concern_duration"],
-        "last_30_days": _answers["last_30_days"],
-        "boundaries": _answers["boundaries"],
-        "preference_info": _answers["preference_info"],
-        "which_best_describes_you": _answers["which_best_describes_you"],
-        "pet_tolerance": _answers["pet_tolerance"],
-        "medicine_success": _answers["medicine_success"],
-        "physical_score": _answers["physical_score"],
-        "physical_explanation": _answers["physical_explanation"],
-        "appetite_score": _answers["appetite_score"],
-        "appetite_explanation": _answers["appetite_explanation"],
-        "food_relationship": _answers["food_relationship"],
-        "hydration_score": _answers["hydration_score"],
-        "hydration_explanation": _answers["hydration_explanation"],
-        "mobility_score": _answers["mobility_score"],
-        "mobility_explanation": _answers["mobility_explanation"],
-        "cleanliness_score": _answers["cleanliness_score"],
-        "cleanliness_explanation": _answers["cleanliness_explanation"],
-        "behavior_change_notes": _answers["behavior_change_notes"],
-        "state_of_mind_score": _answers["state_of_mind_score"],
-        "state_of_mind_explanation": _answers["state_of_mind_explanation"],
-        "joy_items": List<Map<String, dynamic>>.from(
-          (_answers["joy_items"] as List).map(
-            (e) => Map<String, dynamic>.from(e as Map),
-          ),
-        ),
-        "joy_explanation": _answers["joy_explanation"],
-        "owner_state_score": _answers["owner_state_score"],
-        "owner_state_explanation": _answers["owner_state_explanation"],
-      },
-      "heart_score": _heartScore(),
-      "condition_score": _conditionScore(),
-      "significantly_challenged": _hasSignificantlyChallengedFlag(),
-    };
-  }
-
-  Future<void> _submitAssessment() async {
-    if (_isSubmitting) return;
-
-    setState(() {
-      _isSubmitting = true;
-    });
-
-    try {
-      await AssessmentApi.createAssessment(body: _buildAssessmentPayload());
-
-      if (!mounted) return;
-
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text("Assessment saved.")));
-
-      Navigator.of(context).pop(true);
-    } catch (e) {
-      if (!mounted) return;
-
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text("Failed to save assessment: $e")));
-    } finally {
-      if (mounted) {
-        setState(() {
-          _isSubmitting = false;
-        });
-      }
-    }
-  }
+  // ---------------------------
+  // Validation
+  // ---------------------------
 
   bool get _isInitializePartComplete {
     final petThings = (_answers["favorite_pet_things"] as List)
@@ -712,9 +668,6 @@ class _AssessmentPageState extends State<AssessmentPage> {
         (_answers["medicine_success"] ?? "").toString().trim().isNotEmpty;
   }
 
-  bool get _isReadyForReview =>
-      _isInitializePartComplete && _isUpdatePartComplete;
-
   bool get _isUpdatePartComplete {
     final joyItems = _answers["joy_items"] as List<Map<String, dynamic>>;
 
@@ -732,6 +685,9 @@ class _AssessmentPageState extends State<AssessmentPage> {
         (_answers["food_relationship"] ?? "").toString().trim().isNotEmpty &&
         joyDone;
   }
+
+  bool get _isReadyForReview =>
+      _isInitializePartComplete && _isUpdatePartComplete;
 
   bool _isCurrentStepValid() {
     final stepId = _steps[_currentPage].id;
@@ -817,6 +773,97 @@ class _AssessmentPageState extends State<AssessmentPage> {
         return true;
     }
   }
+
+  // ---------------------------
+  // API payload & submission
+  // ---------------------------
+
+  Map<String, dynamic> _buildAssessmentPayload() {
+    return {
+      "pet": widget.petId,
+      "answers": {
+        "favorite_pet_things": List<String>.from(
+          _answers["favorite_pet_things"] as List,
+        ),
+        "favorite_shared_things": List<String>.from(
+          _answers["favorite_shared_things"] as List,
+        ),
+        "biggest_concerns": List<String>.from(
+          _answers["biggest_concerns"] as List,
+        ),
+        "other_concern_text": _answers["other_concern_text"],
+        "concerns_expand": _answers["concerns_expand"],
+        "concern_duration": _answers["concern_duration"],
+        "last_30_days": _answers["last_30_days"],
+        "boundaries": _answers["boundaries"],
+        "preference_info": _answers["preference_info"],
+        "which_best_describes_you": _answers["which_best_describes_you"],
+        "pet_tolerance": _answers["pet_tolerance"],
+        "medicine_success": _answers["medicine_success"],
+        "physical_score": _answers["physical_score"],
+        "physical_explanation": _answers["physical_explanation"],
+        "appetite_score": _answers["appetite_score"],
+        "appetite_explanation": _answers["appetite_explanation"],
+        "food_relationship": _answers["food_relationship"],
+        "hydration_score": _answers["hydration_score"],
+        "hydration_explanation": _answers["hydration_explanation"],
+        "mobility_score": _answers["mobility_score"],
+        "mobility_explanation": _answers["mobility_explanation"],
+        "cleanliness_score": _answers["cleanliness_score"],
+        "cleanliness_explanation": _answers["cleanliness_explanation"],
+        "behavior_change_notes": _answers["behavior_change_notes"],
+        "state_of_mind_score": _answers["state_of_mind_score"],
+        "state_of_mind_explanation": _answers["state_of_mind_explanation"],
+        "joy_items": List<Map<String, dynamic>>.from(
+          (_answers["joy_items"] as List).map(
+            (e) => Map<String, dynamic>.from(e as Map),
+          ),
+        ),
+        "joy_explanation": _answers["joy_explanation"],
+        "owner_state_score": _answers["owner_state_score"],
+        "owner_state_explanation": _answers["owner_state_explanation"],
+      },
+      "heart_score": _heartScore(),
+      "condition_score": _conditionScore(),
+      "significantly_challenged": _hasSignificantlyChallengedFlag(),
+    };
+  }
+
+  Future<void> _submitAssessment() async {
+    if (_isSubmitting) return;
+
+    setState(() {
+      _isSubmitting = true;
+    });
+
+    try {
+      await AssessmentApi.createAssessment(body: _buildAssessmentPayload());
+
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text("Assessment saved.")));
+
+      Navigator.of(context).pop(true);
+    } catch (e) {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text("Failed to save assessment: $e")));
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isSubmitting = false;
+        });
+      }
+    }
+  }
+
+  // ---------------------------
+  // Page scaffold
+  // ---------------------------
 
   @override
   Widget build(BuildContext context) {
@@ -915,6 +962,10 @@ class _AssessmentPageState extends State<AssessmentPage> {
     );
   }
 
+  // ---------------------------
+  // Step content builders
+  // ---------------------------
+
   Widget _buildOverviewStep(BuildContext context) {
     if (_isLoadingPrevious) {
       return const Padding(
@@ -922,6 +973,18 @@ class _AssessmentPageState extends State<AssessmentPage> {
         child: Center(child: CircularProgressIndicator()),
       );
     }
+
+    final backgroundSubtitle = !_hasStartedInitializePart
+        ? "Needs setup"
+        : (_isInitializePartComplete ? "Ready for review" : "In progress");
+
+    final backgroundStatusColor = !_hasPreviousInitializeData
+        ? (_hasStartedInitializePart
+              ? (_isInitializePartComplete
+                    ? const Color(0xFF2E8B57)
+                    : const Color(0xFFD88442))
+              : const Color(0xFF8C6F61))
+        : const Color(0xFF2E8B57);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -933,20 +996,18 @@ class _AssessmentPageState extends State<AssessmentPage> {
         const SizedBox(height: 24),
         _SectionCard(
           title: "Background & Preferences",
-          subtitle: _hasPreviousInitializeData
-              ? "Saved from previous assessment"
-              : "Needs setup",
-          trailingLabel: "Edit",
-          statusColor: _hasPreviousInitializeData
-              ? const Color(0xFF2E8B57)
-              : const Color(0xFFD88442),
+          subtitle: backgroundSubtitle,
+          trailingLabel: _hasStartedInitializePart || _hasPreviousInitializeData
+              ? "Edit"
+              : "Start",
+          statusColor: backgroundStatusColor,
           onTap: () => _jumpToStep("intro_favorites"),
         ),
         const SizedBox(height: 14),
         _SectionCard(
           title: "Recent Quality of Life",
           subtitle: _hasStartedUpdatePart
-              ? (_isUpdatePartComplete ? "Ready to submit" : "In progress")
+              ? (_isUpdatePartComplete ? "Ready for review" : "In progress")
               : "Needs input",
           trailingLabel: _hasStartedUpdatePart ? "Edit" : "Start",
           statusColor: _isUpdatePartComplete
@@ -954,7 +1015,7 @@ class _AssessmentPageState extends State<AssessmentPage> {
               : _hasStartedUpdatePart
               ? const Color(0xFFD88442)
               : const Color(0xFF8C6F61),
-          onTap: () => _jumpToStep(_startAssessmentTarget),
+          onTap: () => _jumpToStep("physical_condition"),
         ),
       ],
     );
@@ -1563,6 +1624,10 @@ class _AssessmentPageState extends State<AssessmentPage> {
     );
   }
 }
+
+// ---------------------------
+// Local models & small UI widgets
+// ---------------------------
 
 class _AssessmentStep {
   final String id;
