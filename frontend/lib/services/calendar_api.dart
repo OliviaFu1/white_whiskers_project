@@ -157,6 +157,48 @@ class CalendarApi {
     return photoUrl;
   }
 
+  static Future<List<Map<String, dynamic>>> listJournalTags() async {
+    final res = await ApiClient.get("/api/calendar/journal-tags/");
+
+    if (res.statusCode < 200 || res.statusCode >= 300) {
+      throw _extractError(res.body) ??
+          "Failed to load journal tags (${res.statusCode})";
+    }
+
+    final decoded = jsonDecode(res.body);
+    if (decoded is List) return decoded.cast<Map<String, dynamic>>();
+    if (decoded is Map && decoded["results"] is List) {
+      return (decoded["results"] as List).cast<Map<String, dynamic>>();
+    }
+    throw "Unexpected journal-tags response format";
+  }
+
+  static Future<Map<String, dynamic>> createJournalTag({
+    required String name,
+    required String color,
+  }) async {
+    final res = await ApiClient.post(
+      "/api/calendar/journal-tags/",
+      jsonBody: {"name": name.trim(), "color": color},
+    );
+
+    if (res.statusCode < 200 || res.statusCode >= 300) {
+      throw _extractError(res.body) ??
+          "Failed to create journal tag (${res.statusCode})";
+    }
+
+    return jsonDecode(res.body) as Map<String, dynamic>;
+  }
+
+  static Future<void> deleteJournalTag(int id) async {
+    final res = await ApiClient.delete("/api/calendar/journal-tags/$id/");
+
+    if (res.statusCode < 200 || res.statusCode >= 300) {
+      throw _extractError(res.body) ??
+          "Failed to delete journal tag (${res.statusCode})";
+    }
+  }
+
   static String? _extractError(String body) {
     try {
       final decoded = jsonDecode(body);

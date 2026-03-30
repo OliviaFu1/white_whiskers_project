@@ -90,8 +90,8 @@ class JournalEntrySerializer(serializers.ModelSerializer):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         request = self.context.get("request")
-        if request and request.user and request.user.is_authenticated:
-            self.fields["tag_ids"].queryset = JournalTag.objects.filter(
+        if request and request.user.is_authenticated:
+            self.fields["tag_ids"].child_relation.queryset = JournalTag.objects.filter(
                 user=request.user
             ).order_by("name")
 
