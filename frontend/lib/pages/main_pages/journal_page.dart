@@ -441,7 +441,6 @@ class _JournalPageState extends State<JournalPage> {
 
     final author = _authorDisplay(entry);
 
-    // --- normalize tags (important: backend now returns objects)
     final rawTags = entry["tags"];
     final tags = (rawTags is List)
         ? rawTags
@@ -466,7 +465,6 @@ class _JournalPageState extends State<JournalPage> {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // --- LEFT CONTENT ---
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -483,7 +481,7 @@ class _JournalPageState extends State<JournalPage> {
 
                 const SizedBox(height: 4),
 
-                // --- DATE + AUTHOR (same row) ---
+                // --- DATE + AUTHOR ---
                 Row(
                   children: [
                     Text(
