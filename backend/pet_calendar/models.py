@@ -1,5 +1,12 @@
 from django.conf import settings
+from django.core.validators import RegexValidator
 from django.db import models
+
+
+hex_color_validator = RegexValidator(
+    regex=r"^#[0-9A-Fa-f]{6}$",
+    message="Color must be a valid hex code like #917869.",
+)
 
 
 class DailyCheckin(models.Model):
@@ -53,6 +60,11 @@ class JournalTag(models.Model):
         db_index=True,
     )
     name = models.CharField(max_length=32)
+    color = models.CharField(
+        max_length=7,
+        default="#917869",
+        validators=[hex_color_validator],
+    )
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -67,6 +79,8 @@ class JournalTag(models.Model):
     def save(self, *args, **kwargs):
         if self.name:
             self.name = self.name.strip().lower()
+        if self.color:
+            self.color = self.color.strip()
         super().save(*args, **kwargs)
 
     def __str__(self):
@@ -91,7 +105,7 @@ class JournalEntry(models.Model):
         db_index=True,
     )
 
-    entry_date = models.DateField()
+    entry_date = models.DateField(db_index=True)
     title = models.CharField(max_length=200, blank=True, default="")
     text = models.TextField(blank=True, default="")
     photo_url = models.URLField(blank=True, default="")

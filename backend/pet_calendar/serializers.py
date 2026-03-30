@@ -32,18 +32,34 @@ class DailyCheckinSerializer(serializers.ModelSerializer):
 class JournalTagSerializer(serializers.ModelSerializer):
     class Meta:
         model = JournalTag
-        fields = ["id", "name", "created_at"]
+        fields = ["id", "name", "color", "created_at"]
         read_only_fields = ["id", "created_at"]
+
+    def validate_name(self, value):
+        value = (value or "").strip().lower()
+        if not value:
+            raise serializers.ValidationError("Tag name cannot be empty.")
+        return value
+
+    def validate_color(self, value):
+        value = (value or "").strip()
+        if not value:
+            raise serializers.ValidationError("Color is required.")
+        return value
 
 
 class JournalEntrySerializer(serializers.ModelSerializer):
     author_user_id = serializers.IntegerField(source="author_id", read_only=True)
     author_name = serializers.CharField(source="author.name", read_only=True)
     pet_id = serializers.IntegerField()
-    tags = serializers.ListField(
-        child=serializers.CharField(max_length=32),
+
+    tags = JournalTagSerializer(many=True, read_only=True)
+    tag_ids = serializers.PrimaryKeyRelatedField(
+        many=True,
+        write_only=True,
         required=False,
-        allow_empty=True,
+        queryset=JournalTag.objects.none(),
+        source="tags",
     )
 
     class Meta:
@@ -59,6 +75,7 @@ class JournalEntrySerializer(serializers.ModelSerializer):
             "photo_url",
             "visibility",
             "tags",
+            "tag_ids",
             "created_at",
             "updated_at",
         ]
@@ -70,55 +87,29 @@ class JournalEntrySerializer(serializers.ModelSerializer):
             "updated_at",
         ]
 
-    def to_representation(self, instance):
-        data = super().to_representation(instance)
-        data["tags"] = list(instance.tags.values_list("name", flat=True))
-        return data
-
-    def validate_tags(self, value):
-        cleaned = []
-        seen = set()
-
-        for tag in value:
-            name = (tag or "").strip().lower()
-            if not name:
-                continue
-            if name not in seen:
-                seen.add(name)
-                cleaned.append(name)
-
-        return cleaned
-
-    def _get_or_create_user_tags(self, user, tag_names):
-        tags = []
-        for name in tag_names:
-            tag_obj, _ = JournalTag.objects.get_or_create(
-                user=user,
-                name=name,
-                defaults={"is_default": False},
-            )
-            tags.append(tag_obj)
-        return tags
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        request = self.context.get("request")
+        if request and request.user and request.user.is_authenticated:
+            self.fields["tag_ids"].queryset = JournalTag.objects.filter(
+                user=request.user
+            ).order_by("name")
 
     def create(self, validated_data):
-        tag_names = validated_data.pop("tags", [])
+        tags = validated_data.pop("tags", [])
         entry = JournalEntry.objects.create(**validated_data)
-
-        if tag_names:
-            tags = self._get_or_create_user_tags(validated_data["author"], tag_names)
+        if tags:
             entry.tags.set(tags)
-
         return entry
 
     def update(self, instance, validated_data):
-        tag_names = validated_data.pop("tags", None)
+        tags = validated_data.pop("tags", None)
 
         for attr, value in validated_data.items():
             setattr(instance, attr, value)
         instance.save()
 
-        if tag_names is not None:
-            tags = self._get_or_create_user_tags(instance.author, tag_names)
+        if tags is not None:
             instance.tags.set(tags)
 
         return instance

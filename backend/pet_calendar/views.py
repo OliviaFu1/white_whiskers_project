@@ -1,22 +1,23 @@
 import os
 import uuid
-from django.db.models import Q
-from django.utils.dateparse import parse_date
+
 from django.conf import settings
 from django.core.files.storage import default_storage
+from django.db.models import Q
+from django.utils.dateparse import parse_date
 
-from rest_framework import viewsets, permissions, status
-from rest_framework.views import APIView
+from rest_framework import permissions, status, viewsets
 from rest_framework.response import Response
+from rest_framework.views import APIView
 
 from .models import DailyCheckin, JournalEntry, JournalTag
+from .permissions import JournalVisibilityPermission, IsAuthorForWriteOtherwiseReadOnly
 from .serializers import (
     DailyCheckinSerializer,
     JournalEntrySerializer,
-    JournalTagSerializer,
     JournalPhotoUploadSerializer,
+    JournalTagSerializer,
 )
-from .permissions import JournalVisibilityPermission, IsAuthorForWriteOtherwiseReadOnly
 
 
 class DailyCheckinViewSet(viewsets.ModelViewSet):
@@ -50,8 +51,10 @@ class JournalTagViewSet(viewsets.ModelViewSet):
         return JournalTag.objects.filter(user=self.request.user).order_by("name")
 
     def perform_create(self, serializer):
-        name = (serializer.validated_data.get("name") or "").strip().lower()
-        serializer.save(user=self.request.user, name=name, is_default=False)
+        serializer.save(user=self.request.user)
+
+    def perform_update(self, serializer):
+        serializer.save(user=self.request.user)
 
 
 class JournalEntryViewSet(viewsets.ModelViewSet):
