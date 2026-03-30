@@ -1,6 +1,5 @@
 from django.conf import settings
 from django.db import models
-from django.utils import timezone
 
 
 class DailyCheckin(models.Model):
@@ -46,6 +45,34 @@ class DailyCheckin(models.Model):
         ordering = ["-checkin_date", "-created_at"]
 
 
+class JournalTag(models.Model):
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="journal_tags",
+        db_index=True,
+    )
+    name = models.CharField(max_length=32)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["name"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["user", "name"],
+                name="unique_journal_tag_per_user",
+            )
+        ]
+
+    def save(self, *args, **kwargs):
+        if self.name:
+            self.name = self.name.strip().lower()
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return self.name
+
+
 class JournalEntry(models.Model):
     class Visibility(models.TextChoices):
         SHARED = "shared", "Shared"
@@ -75,11 +102,11 @@ class JournalEntry(models.Model):
         default=Visibility.SHARED,
         db_index=True,
     )
-    tag = models.CharField(
-        max_length=32,
+
+    tags = models.ManyToManyField(
+        "JournalTag",
+        related_name="journal_entries",
         blank=True,
-        default="",
-        db_index=True,
     )
 
     created_at = models.DateTimeField(auto_now_add=True)

@@ -5,13 +5,17 @@ from django.utils.dateparse import parse_date
 from django.conf import settings
 from django.core.files.storage import default_storage
 
-from rest_framework import viewsets, permissions
+from rest_framework import viewsets, permissions, status
 from rest_framework.views import APIView
 from rest_framework.response import Response
-from rest_framework import status
 
-from .models import DailyCheckin, JournalEntry
-from .serializers import DailyCheckinSerializer, JournalEntrySerializer, JournalPhotoUploadSerializer
+from .models import DailyCheckin, JournalEntry, JournalTag
+from .serializers import (
+    DailyCheckinSerializer,
+    JournalEntrySerializer,
+    JournalTagSerializer,
+    JournalPhotoUploadSerializer,
+)
 from .permissions import JournalVisibilityPermission, IsAuthorForWriteOtherwiseReadOnly
 
 
@@ -35,8 +39,19 @@ class DailyCheckinViewSet(viewsets.ModelViewSet):
         return qs.order_by("-checkin_date", "-created_at")
 
     def perform_create(self, serializer):
-        # Allows creating for any date provided
         serializer.save(author=self.request.user)
+
+
+class JournalTagViewSet(viewsets.ModelViewSet):
+    serializer_class = JournalTagSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_queryset(self):
+        return JournalTag.objects.filter(user=self.request.user).order_by("name")
+
+    def perform_create(self, serializer):
+        name = (serializer.validated_data.get("name") or "").strip().lower()
+        serializer.save(user=self.request.user, name=name, is_default=False)
 
 
 class JournalEntryViewSet(viewsets.ModelViewSet):
@@ -44,7 +59,7 @@ class JournalEntryViewSet(viewsets.ModelViewSet):
     permission_classes = [JournalVisibilityPermission]
 
     def get_queryset(self):
-        qs = JournalEntry.objects.all()
+        qs = JournalEntry.objects.all().prefetch_related("tags")
 
         pet_id = self.request.query_params.get("pet_id")
         if pet_id:
@@ -55,14 +70,12 @@ class JournalEntryViewSet(viewsets.ModelViewSet):
         if day:
             qs = qs.filter(entry_date=day)
 
-        tag = self.request.query_params.get("tag")
+        tag = (self.request.query_params.get("tag") or "").strip().lower()
         if tag:
-            qs = qs.filter(tag=tag)
+            qs = qs.filter(tags__name=tag)
 
-        # Enforce visibility rules at query level too
         user = self.request.user
-        qs = qs.filter()
-        qs = qs.filter(Q(visibility="shared") | Q(author=user))
+        qs = qs.filter(Q(visibility="shared") | Q(author=user)).distinct()
 
         return qs.order_by("-entry_date", "-created_at")
 
@@ -85,9 +98,4 @@ class UploadJournalPhotoView(APIView):
         saved_path = default_storage.save(filename, photo)
         photo_url = request.build_absolute_uri(settings.MEDIA_URL + saved_path)
 
-        return Response(
-            {
-                "photo_url": photo_url,
-            },
-            status=status.HTTP_200_OK,
-        )
+        return Response({"photo_url": photo_url}, status=status.HTTP_200_OK)
