@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../services/assessment_api.dart';
+import '../../state/notifiers.dart';
+import '../app_shell.dart';
 
 part 'assessment_components.dart';
 
@@ -854,6 +856,15 @@ class _AssessmentPageState extends State<AssessmentPage> {
     };
   }
 
+  void _goToMyPetInAppShell() {
+    selectedTabNotifier.value = AppTab.myPet;
+
+    Navigator.of(context).pushAndRemoveUntil(
+      MaterialPageRoute(builder: (_) => const AppShell()),
+      (route) => false,
+    );
+  }
+
   Future<void> _submitAssessment() async {
     if (_isSubmitting) return;
 
@@ -870,7 +881,7 @@ class _AssessmentPageState extends State<AssessmentPage> {
         context,
       ).showSnackBar(const SnackBar(content: Text("Assessment saved.")));
 
-      Navigator.of(context).pop(true);
+      _goToMyPetInAppShell();
     } catch (e) {
       if (!mounted) return;
 
