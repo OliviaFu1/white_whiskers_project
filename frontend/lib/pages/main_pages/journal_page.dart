@@ -493,7 +493,7 @@ class _JournalPageState extends State<JournalPage> {
                         fontWeight: FontWeight.w600,
                       ),
                     ),
-                    const SizedBox(width: 10),
+                    const SizedBox(width: 5),
                     Flexible(
                       child: Text(
                         "By $author",
