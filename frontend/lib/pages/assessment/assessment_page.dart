@@ -52,7 +52,6 @@ class _AssessmentPageState extends State<AssessmentPage> {
     "mobility_explanation": "",
     "cleanliness_score": null,
     "cleanliness_explanation": "",
-    "behavior_change_notes": "",
     "state_of_mind_score": null,
     "state_of_mind_explanation": "",
     "joy_items": <Map<String, dynamic>>[],
@@ -158,6 +157,31 @@ class _AssessmentPageState extends State<AssessmentPage> {
     "state_of_mind",
     "joy",
     "owner_state",
+  ];
+
+  static const List<String> _initializeStartKeys = [
+    "favorite_pet_things",
+    "favorite_shared_things",
+    "biggest_concerns",
+    "other_concern_text",
+    "concerns_expand",
+    "concern_duration",
+    "last_30_days",
+    "boundaries",
+    "preference_info",
+    "which_best_describes_you",
+    "pet_tolerance",
+    "medicine_success",
+  ];
+
+  static const List<String> _updateScoreKeys = [
+    "physical_score",
+    "appetite_score",
+    "hydration_score",
+    "mobility_score",
+    "cleanliness_score",
+    "state_of_mind_score",
+    "owner_state_score",
   ];
 
   List<_AssessmentStep> get _initializeStepsOnly =>
@@ -379,34 +403,12 @@ class _AssessmentPageState extends State<AssessmentPage> {
 
   bool get _hasStartedInitializePart {
     return _isInitializePartComplete ||
-        [
-          "favorite_pet_things",
-          "favorite_shared_things",
-          "biggest_concerns",
-          "other_concern_text",
-          "concerns_expand",
-          "concern_duration",
-          "last_30_days",
-          "boundaries",
-          "preference_info",
-          "which_best_describes_you",
-          "pet_tolerance",
-          "medicine_success",
-        ].any(_hasCurrentValue);
+        _initializeStartKeys.any(_hasCurrentValue);
   }
 
   bool get _hasStartedUpdatePart {
-    return [
-      "physical_score",
-      "appetite_score",
-      "hydration_score",
-      "mobility_score",
-      "cleanliness_score",
-      "state_of_mind_score",
-      "owner_state_score",
-      "food_relationship",
-      "joy_explanation",
-    ].any(_hasCurrentValue);
+    return _updateScoreKeys.any(_hasCurrentValue) ||
+        _hasCurrentValue("food_relationship");
   }
 
   dynamic _prev(String key) => _previousAnswers?[key];
@@ -425,11 +427,42 @@ class _AssessmentPageState extends State<AssessmentPage> {
   }
 
   bool _hasCurrentValue(String key) {
-    final v = _answers[key];
+    return _isNonEmptyValue(_answers[key]);
+  }
+
+  bool _isNonEmptyValue(dynamic v) {
     if (v == null) return false;
     if (v is String) return v.trim().isNotEmpty;
-    if (v is List) return v.isNotEmpty;
+    if (v is Map) {
+      return v.values.any((x) => _isNonEmptyValue(x));
+    }
+    if (v is List) {
+      return v.any((e) => _isNonEmptyValue(e));
+    }
     return true;
+  }
+
+  bool _hasText(String key) {
+    return (_answers[key] ?? "").toString().trim().isNotEmpty;
+  }
+
+  bool _hasScore(String key) {
+    return (_answers[key] as int?) != null;
+  }
+
+  List<String> _stringList(String key) {
+    return (_answers[key] as List).map((e) => e.toString().trim()).toList();
+  }
+
+  bool _allFilled(List<String> values) {
+    return values.every((e) => e.isNotEmpty);
+  }
+
+  bool get _joyItemsComplete {
+    final joyItems = _answers["joy_items"] as List<Map<String, dynamic>>;
+    return joyItems.every(
+      (e) => ((e["status"] ?? "").toString().trim().isNotEmpty),
+    );
   }
 
   String _previousScoreText(String scoreKey, String explanationKey) {
@@ -443,13 +476,13 @@ class _AssessmentPageState extends State<AssessmentPage> {
   }
 
   List<String> _favoriteThingsAll() {
-    final petThings = ((_answers["favorite_pet_things"] as List).map(
-      (e) => e.toString().trim(),
-    )).where((e) => e.isNotEmpty).toList();
+    final petThings = _stringList(
+      "favorite_pet_things",
+    ).where((e) => e.isNotEmpty).toList();
 
-    final sharedThings = ((_answers["favorite_shared_things"] as List).map(
-      (e) => e.toString().trim(),
-    )).where((e) => e.isNotEmpty).toList();
+    final sharedThings = _stringList(
+      "favorite_shared_things",
+    ).where((e) => e.isNotEmpty).toList();
 
     return [...petThings, ...sharedThings];
   }
@@ -490,6 +523,49 @@ class _AssessmentPageState extends State<AssessmentPage> {
           color: Color(0xFF5F5147),
         ),
       ),
+    );
+  }
+
+  Widget _buildPreviousScoreNote({
+    required int? currentScore,
+    required String scoreKey,
+    required String explanationKey,
+  }) {
+    final previousScore = _prevInt(scoreKey);
+    if (currentScore == null || previousScore == null) {
+      return const SizedBox.shrink();
+    }
+
+    return Column(
+      children: [
+        const SizedBox(height: 10),
+        _PreviousAnswerNote(
+          label: "Previous score",
+          value: _previousScoreText(scoreKey, explanationKey),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildExplanationField({
+    required String title,
+    required String answerKey,
+    String description =
+        "Tell us a bit about why you gave the score you gave...",
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const SizedBox(height: 24),
+        _FieldTitle(title, description: description),
+        const SizedBox(height: 10),
+        _TextAnswerField(
+          initialValue: _answers[answerKey],
+          minLines: 4,
+          maxLines: 6,
+          onChanged: (v) => _answers[answerKey] = v,
+        ),
+      ],
     );
   }
 
@@ -633,57 +709,30 @@ class _AssessmentPageState extends State<AssessmentPage> {
   // ---------------------------
 
   bool get _isInitializePartComplete {
-    final petThings = (_answers["favorite_pet_things"] as List)
-        .map((e) => e.toString().trim())
-        .toList();
-
-    final sharedThings = (_answers["favorite_shared_things"] as List)
-        .map((e) => e.toString().trim())
-        .toList();
-
-    final concerns = (_answers["biggest_concerns"] as List)
-        .map((e) => e.toString().trim())
-        .toList();
+    final petThings = _stringList("favorite_pet_things");
+    final sharedThings = _stringList("favorite_shared_things");
+    final concerns = _stringList("biggest_concerns");
 
     final needsOther = concerns.contains("Other");
 
-    return petThings.every((e) => e.isNotEmpty) &&
-        sharedThings.every((e) => e.isNotEmpty) &&
+    return _allFilled(petThings) &&
+        _allFilled(sharedThings) &&
         concerns.isNotEmpty &&
-        (!needsOther ||
-            (_answers["other_concern_text"] ?? "")
-                .toString()
-                .trim()
-                .isNotEmpty) &&
-        (_answers["concerns_expand"] ?? "").toString().trim().isNotEmpty &&
-        (_answers["concern_duration"] ?? "").toString().trim().isNotEmpty &&
-        (_answers["last_30_days"] ?? "").toString().trim().isNotEmpty &&
-        (_answers["boundaries"] ?? "").toString().trim().isNotEmpty &&
-        (_answers["preference_info"] ?? "").toString().trim().isNotEmpty &&
-        (_answers["which_best_describes_you"] ?? "")
-            .toString()
-            .trim()
-            .isNotEmpty &&
-        (_answers["pet_tolerance"] ?? "").toString().trim().isNotEmpty &&
-        (_answers["medicine_success"] ?? "").toString().trim().isNotEmpty;
+        (!needsOther || _hasText("other_concern_text")) &&
+        _hasText("concerns_expand") &&
+        _hasText("concern_duration") &&
+        _hasText("last_30_days") &&
+        _hasText("boundaries") &&
+        _hasText("preference_info") &&
+        _hasText("which_best_describes_you") &&
+        _hasText("pet_tolerance") &&
+        _hasText("medicine_success");
   }
 
   bool get _isUpdatePartComplete {
-    final joyItems = _answers["joy_items"] as List<Map<String, dynamic>>;
-
-    final joyDone = joyItems.every(
-      (e) => ((e["status"] ?? "").toString().trim().isNotEmpty),
-    );
-
-    return (_answers["physical_score"] as int?) != null &&
-        (_answers["appetite_score"] as int?) != null &&
-        (_answers["hydration_score"] as int?) != null &&
-        (_answers["mobility_score"] as int?) != null &&
-        (_answers["cleanliness_score"] as int?) != null &&
-        (_answers["state_of_mind_score"] as int?) != null &&
-        (_answers["owner_state_score"] as int?) != null &&
-        (_answers["food_relationship"] ?? "").toString().trim().isNotEmpty &&
-        joyDone;
+    return _updateScoreKeys.every(_hasScore) &&
+        _hasText("food_relationship") &&
+        _joyItemsComplete;
   }
 
   bool get _isReadyForReview =>
@@ -697,74 +746,51 @@ class _AssessmentPageState extends State<AssessmentPage> {
         return _isUpdatePartComplete;
 
       case "intro_favorites":
-        final petThings = (_answers["favorite_pet_things"] as List)
-            .map((e) => e.toString().trim())
-            .toList();
-        final sharedThings = (_answers["favorite_shared_things"] as List)
-            .map((e) => e.toString().trim())
-            .toList();
-        return petThings.every((e) => e.isNotEmpty) &&
-            sharedThings.every((e) => e.isNotEmpty);
+        return _allFilled(_stringList("favorite_pet_things")) &&
+            _allFilled(_stringList("favorite_shared_things"));
 
       case "concerns":
-        final selected = (_answers["biggest_concerns"] as List)
-            .map((e) => e.toString())
-            .toList();
+        final selected = _stringList("biggest_concerns");
         final needsOther = selected.contains("Other");
         return selected.isNotEmpty &&
-            (!needsOther ||
-                (_answers["other_concern_text"] ?? "")
-                    .toString()
-                    .trim()
-                    .isNotEmpty) &&
-            (_answers["concerns_expand"] ?? "").toString().trim().isNotEmpty &&
-            (_answers["concern_duration"] ?? "").toString().trim().isNotEmpty &&
-            (_answers["last_30_days"] ?? "").toString().trim().isNotEmpty;
+            (!needsOther || _hasText("other_concern_text")) &&
+            _hasText("concerns_expand") &&
+            _hasText("concern_duration") &&
+            _hasText("last_30_days");
 
       case "boundaries":
-        return (_answers["boundaries"] ?? "").toString().trim().isNotEmpty;
+        return _hasText("boundaries");
 
       case "describe_yourself":
-        return (_answers["preference_info"] ?? "")
-                .toString()
-                .trim()
-                .isNotEmpty &&
-            (_answers["which_best_describes_you"] ?? "")
-                .toString()
-                .trim()
-                .isNotEmpty;
+        return _hasText("preference_info") &&
+            _hasText("which_best_describes_you");
 
       case "describe_pet":
-        return (_answers["pet_tolerance"] ?? "").toString().trim().isNotEmpty &&
-            (_answers["medicine_success"] ?? "").toString().trim().isNotEmpty;
+        return _hasText("pet_tolerance") && _hasText("medicine_success");
 
       case "physical_condition":
-        return (_answers["physical_score"] as int?) != null;
+        return _hasScore("physical_score");
 
       case "appetite":
-        return (_answers["appetite_score"] as int?) != null &&
-            (_answers["food_relationship"] ?? "").toString().trim().isNotEmpty;
+        return _hasScore("appetite_score") && _hasText("food_relationship");
 
       case "water_intake":
-        return (_answers["hydration_score"] as int?) != null;
+        return _hasScore("hydration_score");
 
       case "mobility":
-        return (_answers["mobility_score"] as int?) != null;
+        return _hasScore("mobility_score");
 
       case "hygiene":
-        return (_answers["cleanliness_score"] as int?) != null;
+        return _hasScore("cleanliness_score");
 
       case "state_of_mind":
-        return (_answers["state_of_mind_score"] as int?) != null;
+        return _hasScore("state_of_mind_score");
 
       case "joy":
-        final joyItems = _answers["joy_items"] as List<Map<String, dynamic>>;
-        return joyItems.every(
-          (e) => ((e["status"] ?? "").toString().trim().isNotEmpty),
-        );
+        return _joyItemsComplete;
 
       case "owner_state":
-        return (_answers["owner_state_score"] as int?) != null;
+        return _hasScore("owner_state_score");
 
       case "results":
         return true;
@@ -811,7 +837,6 @@ class _AssessmentPageState extends State<AssessmentPage> {
         "mobility_explanation": _answers["mobility_explanation"],
         "cleanliness_score": _answers["cleanliness_score"],
         "cleanliness_explanation": _answers["cleanliness_explanation"],
-        "behavior_change_notes": _answers["behavior_change_notes"],
         "state_of_mind_score": _answers["state_of_mind_score"],
         "state_of_mind_explanation": _answers["state_of_mind_explanation"],
         "joy_items": List<Map<String, dynamic>>.from(
@@ -926,6 +951,10 @@ class _AssessmentPageState extends State<AssessmentPage> {
               nextLabel: _nextButtonLabel,
               nextEnabled: _isNextEnabled,
               onBack: () {
+                if (_steps[_currentPage].id == "results") {
+                  _jumpToStep("overview");
+                  return;
+                }
                 if (_currentPage == 0) return;
                 _goBack();
               },
@@ -1083,7 +1112,8 @@ class _AssessmentPageState extends State<AssessmentPage> {
           _TextAnswerField(
             initialValue: _answers["other_concern_text"],
             hintText: "Please specify",
-            onChanged: (v) => _answers["other_concern_text"] = v,
+            onChanged: (v) =>
+                setState(() => _answers["other_concern_text"] = v),
           ),
         ],
         const SizedBox(height: 24),
@@ -1095,7 +1125,7 @@ class _AssessmentPageState extends State<AssessmentPage> {
           initialValue: _answers["concerns_expand"],
           minLines: 4,
           maxLines: 6,
-          onChanged: (v) => _answers["concerns_expand"] = v,
+          onChanged: (v) => setState(() => _answers["concerns_expand"] = v),
         ),
         const SizedBox(height: 24),
         _FieldTitle("How long has it been going on?"),
@@ -1222,7 +1252,6 @@ class _AssessmentPageState extends State<AssessmentPage> {
 
   Widget _buildPhysicalConditionStep(BuildContext context) {
     final int? score = _answers["physical_score"] as int?;
-    final int? previousScore = _prevInt("physical_score");
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -1237,13 +1266,11 @@ class _AssessmentPageState extends State<AssessmentPage> {
               "For reference and consideration (rated most important to least):\n- Respiration (Breathing)\n- Pain (Difficult to assess in stoic pets)\n- Tumors/Cancer\n- Wounds/Infections",
           onChanged: (v) => setState(() => _answers["physical_score"] = v),
         ),
-        if (score != null && previousScore != null) ...[
-          const SizedBox(height: 10),
-          _PreviousAnswerNote(
-            label: "Previous score",
-            value: _previousScoreText("physical_score", "physical_explanation"),
-          ),
-        ],
+        _buildPreviousScoreNote(
+          currentScore: score,
+          scoreKey: "physical_score",
+          explanationKey: "physical_explanation",
+        ),
         if (score != null && score <= 5)
           _helperText(
             "An inability to properly breathe should be considered a veterinary emergency. If you feel that ${widget.petName} is having labored breathing, please call us right away or reach out to your nearest emergency veterinary clinic.\n\n"
@@ -1251,17 +1278,9 @@ class _AssessmentPageState extends State<AssessmentPage> {
             "Many of our pets are programmed to hide their discomfort rather than communicate it to us although this can vary from pet to pet. When that discomfort has moved beyond the threshold of their ability to hide it, we are called on to form actionable plans to improve their situation. If you feel that ${widget.petName} is experiencing pain or discomfort, we may be able to help. There comes a time, however, when that discomfort outpaces our tools to control it. When that happens, it becomes time to talk about alternative forms of help.\n\n"
             "A diagnosis of a tumor, or worse, cancer, is almost always frightening. The prognosis and personal experience of having this broad category of diseases can vary wildly depending on the specific diagnosis and your animal. We can help guide you through better understanding what this diagnosis means and how we can best be an advocate for your pet.",
           ),
-        const SizedBox(height: 24),
-        _FieldTitle(
-          "Physical Score Explanation",
-          description: "Tell us a bit about why you gave the score you gave...",
-        ),
-        const SizedBox(height: 10),
-        _TextAnswerField(
-          initialValue: _answers["physical_explanation"],
-          minLines: 4,
-          maxLines: 6,
-          onChanged: (v) => _answers["physical_explanation"] = v,
+        _buildExplanationField(
+          title: "Physical Score Explanation",
+          answerKey: "physical_explanation",
         ),
       ],
     );
@@ -1269,7 +1288,6 @@ class _AssessmentPageState extends State<AssessmentPage> {
 
   Widget _buildAppetiteStep(BuildContext context) {
     final int? score = _answers["appetite_score"] as int?;
-    final int? previousScore = _prevInt("appetite_score");
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -1283,29 +1301,15 @@ class _AssessmentPageState extends State<AssessmentPage> {
               "Abnormal appetite could mean excessive hunger or refusal to eat.",
           onChanged: (v) => setState(() => _answers["appetite_score"] = v),
         ),
-        if (score != null && previousScore != null) ...[
-          const SizedBox(height: 10),
-          _PreviousAnswerNote(
-            label: "Previous score",
-            value: _previousScoreText("appetite_score", "appetite_explanation"),
-          ),
-        ],
+        _buildPreviousScoreNote(
+          currentScore: score,
+          scoreKey: "appetite_score",
+          explanationKey: "appetite_explanation",
+        ),
         if (score != null)
           _helperText(
             "It's important to understand the limitations of this metric. There are animals whose food motivation transcends the greatest of discomforts and there are animals who stop eating for reasons that we may be able to address. In either case, we begin with a conversation and from there seek to give you the best guidance we can to access exactly the kind of care that ${widget.petName} needs.",
           ),
-        const SizedBox(height: 24),
-        _FieldTitle(
-          "Appetite Score Explanation",
-          description: "Tell us a bit about why you gave the score you gave...",
-        ),
-        const SizedBox(height: 10),
-        _TextAnswerField(
-          initialValue: _answers["appetite_explanation"],
-          minLines: 4,
-          maxLines: 6,
-          onChanged: (v) => _answers["appetite_explanation"] = v,
-        ),
         const SizedBox(height: 24),
         _FieldTitle(
           "How would you describe ${widget.petName}'s relationship with food these days?",
@@ -1316,13 +1320,16 @@ class _AssessmentPageState extends State<AssessmentPage> {
           options: const ["Eats all the food", "Picky and discerning"],
           onChanged: (v) => setState(() => _answers["food_relationship"] = v),
         ),
+        _buildExplanationField(
+          title: "Appetite Score Explanation",
+          answerKey: "appetite_explanation",
+        ),
       ],
     );
   }
 
   Widget _buildHydrationStep(BuildContext context) {
     final int? score = _answers["hydration_score"] as int?;
-    final int? previousScore = _prevInt("hydration_score");
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -1337,31 +1344,18 @@ class _AssessmentPageState extends State<AssessmentPage> {
               "Abnormal water intake could mean excessive thirst or refusal to drink.",
           onChanged: (v) => setState(() => _answers["hydration_score"] = v),
         ),
-        if (score != null && previousScore != null) ...[
-          const SizedBox(height: 10),
-          _PreviousAnswerNote(
-            label: "Previous score",
-            value: _previousScoreText(
-              "hydration_score",
-              "hydration_explanation",
-            ),
-          ),
-        ],
+        _buildPreviousScoreNote(
+          currentScore: score,
+          scoreKey: "hydration_score",
+          explanationKey: "hydration_explanation",
+        ),
         if (score != null)
           _helperText(
             "Our pets can unexpectedly start drinking excess water or very little water for a variety of reasons. Sudden changes in whether the water bowl empties too quickly or doesn't empty at all can give us hints about what's going on internally with ${widget.petName}. Likewise, sudden, consistent changes to ${widget.petName}'s urine output can give us a snapshot of their kidney health. Like with our appetite, drinking too much can be as much of a signifier that something is wrong as drinking too little. Don't worry, we'll figure it out together.",
           ),
-        const SizedBox(height: 24),
-        _FieldTitle(
-          "Hydration Score Explanation",
-          description: "Tell us a bit about why you gave the score you gave...",
-        ),
-        const SizedBox(height: 10),
-        _TextAnswerField(
-          initialValue: _answers["hydration_explanation"],
-          minLines: 4,
-          maxLines: 6,
-          onChanged: (v) => _answers["hydration_explanation"] = v,
+        _buildExplanationField(
+          title: "Hydration Score Explanation",
+          answerKey: "hydration_explanation",
         ),
       ],
     );
@@ -1369,7 +1363,6 @@ class _AssessmentPageState extends State<AssessmentPage> {
 
   Widget _buildMobilityStep(BuildContext context) {
     final int? score = _answers["mobility_score"] as int?;
-    final int? previousScore = _prevInt("mobility_score");
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -1381,24 +1374,14 @@ class _AssessmentPageState extends State<AssessmentPage> {
           rightLabel: "10 (best)",
           onChanged: (v) => setState(() => _answers["mobility_score"] = v),
         ),
-        if (score != null && previousScore != null) ...[
-          const SizedBox(height: 10),
-          _PreviousAnswerNote(
-            label: "Previous score",
-            value: _previousScoreText("mobility_score", "mobility_explanation"),
-          ),
-        ],
-        const SizedBox(height: 24),
-        _FieldTitle(
-          "Mobility Score Explanation",
-          description: "Tell us a bit about why you gave the score you gave...",
+        _buildPreviousScoreNote(
+          currentScore: score,
+          scoreKey: "mobility_score",
+          explanationKey: "mobility_explanation",
         ),
-        const SizedBox(height: 10),
-        _TextAnswerField(
-          initialValue: _answers["mobility_explanation"],
-          minLines: 4,
-          maxLines: 6,
-          onChanged: (v) => _answers["mobility_explanation"] = v,
+        _buildExplanationField(
+          title: "Mobility Score Explanation",
+          answerKey: "mobility_explanation",
         ),
       ],
     );
@@ -1406,7 +1389,6 @@ class _AssessmentPageState extends State<AssessmentPage> {
 
   Widget _buildCleanlinessStep(BuildContext context) {
     final int? score = _answers["cleanliness_score"] as int?;
-    final int? previousScore = _prevInt("cleanliness_score");
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -1419,31 +1401,18 @@ class _AssessmentPageState extends State<AssessmentPage> {
           rightLabel: "10 (best)",
           onChanged: (v) => setState(() => _answers["cleanliness_score"] = v),
         ),
-        if (score != null && previousScore != null) ...[
-          const SizedBox(height: 10),
-          _PreviousAnswerNote(
-            label: "Previous score",
-            value: _previousScoreText(
-              "cleanliness_score",
-              "cleanliness_explanation",
-            ),
-          ),
-        ],
+        _buildPreviousScoreNote(
+          currentScore: score,
+          scoreKey: "cleanliness_score",
+          explanationKey: "cleanliness_explanation",
+        ),
         if (score != null && score <= 5)
           _helperText(
             "As our pets age, they can lose both physical control and sensation over their ability to eliminate. This can result in an otherwise proud and disciplined pet, eliminating in the house. Mobility or cognitive challenges can also impede a senior pet's ability to alert their owner to their needs or access proper elimination locations in a timely or successful manner. This can include litterboxes that were once accessible but no longer suitable or stairs to potty spots that are now too challenging to navigate. This isn't their fault, but the challenges that they face aren't always obvious to us at first glance. If ${widget.petName} is having difficulty with elimination or hygiene, there may be things we can do to help.",
           ),
-        const SizedBox(height: 24),
-        _FieldTitle(
-          "Cleanliness Score Explanation",
-          description: "Tell us a bit about why you gave the score you gave...",
-        ),
-        const SizedBox(height: 10),
-        _TextAnswerField(
-          initialValue: _answers["cleanliness_explanation"],
-          minLines: 4,
-          maxLines: 6,
-          onChanged: (v) => _answers["cleanliness_explanation"] = v,
+        _buildExplanationField(
+          title: "Cleanliness Score Explanation",
+          answerKey: "cleanliness_explanation",
         ),
       ],
     );
@@ -1451,7 +1420,6 @@ class _AssessmentPageState extends State<AssessmentPage> {
 
   Widget _buildStateOfMindStep(BuildContext context) {
     final int? score = _answers["state_of_mind_score"] as int?;
-    final int? previousScore = _prevInt("state_of_mind_score");
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -1463,32 +1431,19 @@ class _AssessmentPageState extends State<AssessmentPage> {
           rightLabel: "10 (best)",
           onChanged: (v) => setState(() => _answers["state_of_mind_score"] = v),
         ),
-        if (score != null && previousScore != null) ...[
-          const SizedBox(height: 10),
-          _PreviousAnswerNote(
-            label: "Previous score",
-            value: _previousScoreText(
-              "state_of_mind_score",
-              "state_of_mind_explanation",
-            ),
-          ),
-        ],
+        _buildPreviousScoreNote(
+          currentScore: score,
+          scoreKey: "state_of_mind_score",
+          explanationKey: "state_of_mind_explanation",
+        ),
         if (score != null && score <= 5)
           _helperText(
             "It can be so hard to feel your pet mentally slip away from you even before they physically slip away from you. It can even test the loving bond that you've developed with your pet over the time you both have shared.\n\n"
             "Cognitive decline, whatever the cause, can be a prison of anxiety and confusion for our pets whether or not they are being challenged physically. However, all too often we can feel deep guilt over discussing quality of life options when our pets' bodies don't raise the same concern as their minds. Cognition and state of mind is a critical component to the quality of life of our pets who live in the moment and for today. If you feel as though ${widget.petName} has undergone significant cognitive change, it's never too early to have a discussion about how we might be able to help.",
           ),
-        const SizedBox(height: 24),
-        _FieldTitle(
-          "Cognition Score Explanation",
-          description: "Tell us a bit about why you gave the score you gave...",
-        ),
-        const SizedBox(height: 10),
-        _TextAnswerField(
-          initialValue: _answers["state_of_mind_explanation"],
-          minLines: 4,
-          maxLines: 6,
-          onChanged: (v) => _answers["state_of_mind_explanation"] = v,
+        _buildExplanationField(
+          title: "Cognition Score Explanation",
+          answerKey: "state_of_mind_explanation",
         ),
       ],
     );
@@ -1535,7 +1490,6 @@ class _AssessmentPageState extends State<AssessmentPage> {
 
   Widget _buildOwnerStateStep(BuildContext context) {
     final int? score = _answers["owner_state_score"] as int?;
-    final int? previousScore = _prevInt("owner_state_score");
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -1548,33 +1502,20 @@ class _AssessmentPageState extends State<AssessmentPage> {
           rightLabel: "10 (best)",
           onChanged: (v) => setState(() => _answers["owner_state_score"] = v),
         ),
-        if (score != null && previousScore != null) ...[
-          const SizedBox(height: 10),
-          _PreviousAnswerNote(
-            label: "Previous score",
-            value: _previousScoreText(
-              "owner_state_score",
-              "owner_state_explanation",
-            ),
-          ),
-        ],
+        _buildPreviousScoreNote(
+          currentScore: score,
+          scoreKey: "owner_state_score",
+          explanationKey: "owner_state_explanation",
+        ),
         if (score != null && score <= 6)
           _helperText(
             "This stage of life is often the most challenging as the burden of responsibility regarding end-of-life decisions weighs heavily on an owner's shoulders. We've loved them, often for the entire length of their lives. Admitting the rigors of this phase of your relationship to others and even to oneself can riddle many people with guilt.\n\n"
             "We want you to know that YOU matter. The BOND that you share with ${widget.petName} matters. When discussing quality of life, we are remiss to overlook such an important aspect of ${widget.petName}'s situation.\n\n"
             "We are here to help the both of you in every way that we can.",
           ),
-        const SizedBox(height: 24),
-        _FieldTitle(
-          "${widget.ownerName}'s Score Explanation",
-          description: "Tell us a bit about why you gave the score you gave...",
-        ),
-        const SizedBox(height: 10),
-        _TextAnswerField(
-          initialValue: _answers["owner_state_explanation"],
-          minLines: 4,
-          maxLines: 6,
-          onChanged: (v) => _answers["owner_state_explanation"] = v,
+        _buildExplanationField(
+          title: "${widget.ownerName}'s Score Explanation",
+          answerKey: "owner_state_explanation",
         ),
       ],
     );
