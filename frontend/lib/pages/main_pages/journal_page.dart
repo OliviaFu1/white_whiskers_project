@@ -1,13 +1,11 @@
-import 'dart:io';
 import 'package:flutter/material.dart';
-import 'package:image_picker/image_picker.dart';
 
-import 'package:frontend/pages/app_shell.dart';
+import 'package:frontend/models/pet.dart';
+import 'package:frontend/pages/main_pages/add_journal_page.dart';
 import 'package:frontend/services/calendar_api.dart';
 import 'package:frontend/services/pet_store.dart';
 import 'package:frontend/services/pets_api.dart';
 import 'package:frontend/state/notifiers.dart';
-import 'package:frontend/models/pet.dart';
 
 class JournalPage extends StatefulWidget {
   const JournalPage({super.key});
@@ -22,51 +20,43 @@ class _JournalPageState extends State<JournalPage> {
   static const titleColor = Color(0xFFD88442);
   static const muted = Color(0xFF676767);
   static const cardBorder = Color(0xFFF0E4DB);
-  static const softFill = Color(0xFFFFFCFA);
   static const chipBg = Color(0xFFF3ECE7);
 
-  final _titleCtl = TextEditingController();
-  final _textCtl = TextEditingController();
-  final _manualTagCtl = TextEditingController();
-
-  final ImagePicker _picker = ImagePicker();
-
-  late DateTime _selectedDay;
-
-  String _visibility = "shared";
-  String _tag = "food";
-  String _photoUrl = '';
-
   bool _loadingPet = true;
-  bool _submitting = false;
-  bool _uploadingPhoto = false;
+  bool _loadingEntries = true;
+  bool _loadingTags = true;
   String? _error;
 
-  File? _pickedImage;
   List<Map<String, dynamic>> pets = [];
+  List<Map<String, dynamic>> _entries = [];
+  List<Map<String, dynamic>> _tags = [];
 
-  void _onSelectedPetChanged() {
-    final selected = selectedPetNotifier.value;
-    if (selected == null || !mounted) return;
-    setState(() {});
-    PetStore.setCurrentPetId(selected.id);
-  }
+  String? _selectedTag;
 
   @override
   void initState() {
     super.initState();
-    _selectedDay = _dateOnly(DateTime.now());
-    _loadPets();
     selectedPetNotifier.addListener(_onSelectedPetChanged);
+    _init();
   }
 
   @override
   void dispose() {
     selectedPetNotifier.removeListener(_onSelectedPetChanged);
-    _titleCtl.dispose();
-    _textCtl.dispose();
-    _manualTagCtl.dispose();
     super.dispose();
+  }
+
+  Future<void> _init() async {
+    await _loadPets();
+    await Future.wait([_loadTags(), _loadEntries()]);
+  }
+
+  void _onSelectedPetChanged() {
+    final selected = selectedPetNotifier.value;
+    if (selected == null || !mounted) return;
+    PetStore.setCurrentPetId(selected.id);
+    setState(() {});
+    _loadEntries();
   }
 
   Future<void> _loadPets() async {
@@ -112,12 +102,58 @@ class _JournalPageState extends State<JournalPage> {
     }
   }
 
-  DateTime _dateOnly(DateTime d) => DateTime(d.year, d.month, d.day);
+  Future<void> _loadTags() async {
+    try {
+      final tags = await CalendarApi.listJournalTags();
+      if (!mounted) return;
+      setState(() {
+        _tags = tags;
+        _loadingTags = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _error = e.toString();
+        _loadingTags = false;
+      });
+    }
+  }
 
-  String _yyyyMmDd(DateTime d) =>
-      "${d.year.toString().padLeft(4, '0')}-"
-      "${d.month.toString().padLeft(2, '0')}-"
-      "${d.day.toString().padLeft(2, '0')}";
+  Future<void> _loadEntries() async {
+    final petId = _pet?["id"] as int?;
+    if (petId == null) {
+      if (!mounted) return;
+      setState(() {
+        _entries = [];
+        _loadingEntries = false;
+      });
+      return;
+    }
+
+    setState(() {
+      _loadingEntries = true;
+      _error = null;
+    });
+
+    try {
+      final entries = await CalendarApi.listJournalEntries(
+        petId: petId,
+        tag: _selectedTag,
+      );
+
+      if (!mounted) return;
+      setState(() {
+        _entries = entries;
+        _loadingEntries = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _error = e.toString();
+        _loadingEntries = false;
+      });
+    }
+  }
 
   Map<String, dynamic>? get _pet {
     if (pets.isEmpty) return null;
@@ -136,502 +172,416 @@ class _JournalPageState extends State<JournalPage> {
     return name.isEmpty ? "Your Pet" : name;
   }
 
-  String get _finalTag {
-    final manual = _manualTagCtl.text.trim();
-    return manual.isNotEmpty ? manual : _tag;
+  Future<void> _openAddPage() async {
+    await Navigator.of(
+      context,
+    ).push<bool>(MaterialPageRoute(builder: (_) => const AddJournalPage()));
+
+    await Future.wait([_loadTags(), _loadEntries()]);
   }
 
-  Future<void> _pickDate() async {
-    final today = _dateOnly(DateTime.now());
-
-    final picked = await showDatePicker(
-      context: context,
-      initialDate: _selectedDay.isAfter(today) ? today : _selectedDay,
-      firstDate: today.subtract(const Duration(days: 365)),
-      lastDate: today,
-    );
-
-    if (picked != null && mounted) {
-      setState(() => _selectedDay = _dateOnly(picked));
+  String _formatDate(String raw) {
+    try {
+      final d = DateTime.parse(raw);
+      final mm = d.month.toString().padLeft(2, '0');
+      final dd = d.day.toString().padLeft(2, '0');
+      return "${d.year}-$mm-$dd";
+    } catch (_) {
+      return raw;
     }
   }
 
-  Future<void> _pickAndUploadPhoto() async {
-    final image = await _picker.pickImage(
-      source: ImageSource.gallery,
-      imageQuality: 85,
-    );
-    if (image == null) return;
-
-    setState(() {
-      _pickedImage = File(image.path);
-      _uploadingPhoto = true;
-      _error = null;
-    });
+  Color _parseHexColor(String? hex, {Color fallback = chipBg}) {
+    if (hex == null) return fallback;
+    final cleaned = hex.trim().replaceFirst('#', '');
+    if (cleaned.length != 6) return fallback;
 
     try {
-      final photoUrl = await CalendarApi.uploadJournalPhoto(
-        image.path,
-        mimeType: image.mimeType ?? 'image/jpeg',
-      );
-
-      setState(() {
-        _photoUrl = photoUrl;
-      });
-    } catch (e) {
-      setState(() {
-        _error = e.toString();
-        _pickedImage = null;
-        _photoUrl = '';
-      });
-    } finally {
-      if (mounted) {
-        setState(() => _uploadingPhoto = false);
-      }
+      return Color(int.parse('FF$cleaned', radix: 16));
+    } catch (_) {
+      return fallback;
     }
   }
 
-  void _removePhoto() {
-    setState(() {
-      _pickedImage = null;
-      _photoUrl = '';
-    });
+  List<Map<String, dynamic>> _normalizedTags(dynamic rawTags) {
+    if (rawTags is! List) return const [];
+
+    return rawTags
+        .whereType<dynamic>()
+        .map((e) {
+          if (e is Map<String, dynamic>) return e;
+          if (e is Map) return Map<String, dynamic>.from(e);
+          return <String, dynamic>{};
+        })
+        .where((e) => (e["name"] ?? "").toString().trim().isNotEmpty)
+        .toList();
   }
 
-  Future<void> _submit() async {
-    setState(() {
-      _submitting = true;
-      _error = null;
-    });
+  String _authorDisplay(Map<String, dynamic> entry) {
+    final author = entry["author"];
 
-    try {
-      final petId = _pet?["id"] as int?;
-      if (petId == null) throw "No pet selected.";
-      await PetStore.setCurrentPetId(petId);
+    if (author is Map) {
+      final first = (author["first_name"] ?? "").toString().trim();
+      final last = (author["last_name"] ?? "").toString().trim();
+      final full = "$first $last".trim();
+      if (full.isNotEmpty) return full;
 
-      final body = <String, dynamic>{
-        "pet_id": petId,
-        "entry_date": _yyyyMmDd(_dateOnly(_selectedDay)),
-        "title": _titleCtl.text.trim(),
-        "text": _textCtl.text.trim(),
-        "photo_url": _photoUrl,
-        "visibility": _visibility,
-        "tag": _finalTag,
-      };
+      final username = (author["username"] ?? "").toString().trim();
+      if (username.isNotEmpty) return username;
 
-      await CalendarApi.createJournalEntry(body: body);
-
-      if (!mounted) return;
-
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text("Journal saved.")));
-
-      Navigator.of(context).pushAndRemoveUntil(
-        MaterialPageRoute(builder: (_) => const AppShell()),
-        (route) => false,
-      );
-    } catch (e) {
-      if (!mounted) return;
-      setState(() => _error = e.toString());
-    } finally {
-      if (mounted) setState(() => _submitting = false);
+      final name = (author["name"] ?? "").toString().trim();
+      if (name.isNotEmpty) return name;
     }
+
+    final authorName = (entry["author_name"] ?? "").toString().trim();
+    if (authorName.isNotEmpty) return authorName;
+
+    return "Unknown author";
+  }
+
+  String _entryPreview(Map<String, dynamic> entry) {
+    final text = (entry["text"] ?? "").toString().trim();
+    if (text.isNotEmpty) return text;
+
+    final tags = _normalizedTags(entry["tags"]);
+    if (tags.isNotEmpty) {
+      return tags.map((tag) => "#${tag["name"]}").join("  ");
+    }
+
+    return "No details added";
   }
 
   @override
   Widget build(BuildContext context) {
+    final isLoading = _loadingPet || _loadingTags;
+
     return Scaffold(
       backgroundColor: bg,
-      resizeToAvoidBottomInset: true,
-      bottomNavigationBar: SafeArea(
-        minimum: const EdgeInsets.fromLTRB(18, 0, 18, 14),
-        child: SizedBox(
-          height: 54,
-          child: ElevatedButton(
-            onPressed: _loadingPet || _submitting || _uploadingPhoto
-                ? null
-                : _submit,
-            style: ElevatedButton.styleFrom(
-              backgroundColor: accent,
-              disabledBackgroundColor: accent.withOpacity(0.65),
-              elevation: 0,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(16),
-              ),
-            ),
-            child: _submitting
-                ? const SizedBox(
-                    height: 18,
-                    width: 18,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      color: Colors.white,
-                    ),
-                  )
-                : const Text(
-                    "Save journal entry",
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w700,
-                      color: Colors.white,
-                    ),
-                  ),
-          ),
-        ),
-      ),
       body: SafeArea(
         bottom: false,
-        child: _loadingPet
+        child: isLoading
             ? const Center(child: CircularProgressIndicator())
-            : SingleChildScrollView(
-                padding: const EdgeInsets.fromLTRB(18, 6, 18, 14),
-                keyboardDismissBehavior:
-                    ScrollViewKeyboardDismissBehavior.onDrag,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    Text(
-                      "Journal entry for $_petNameDisplay",
-                      style: const TextStyle(
-                        fontSize: 28,
-                        fontWeight: FontWeight.w800,
-                        color: titleColor,
-                        height: 1.1,
-                      ),
-                    ),
-                    const SizedBox(height: 14),
-
-                    TextField(
-                      controller: _titleCtl,
-                      textInputAction: TextInputAction.next,
-                      decoration: InputDecoration(
-                        hintText: "Title",
-                        filled: true,
-                        fillColor: Colors.white,
-                        contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 14,
-                          vertical: 14,
-                        ),
-                        enabledBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(16),
-                          borderSide: const BorderSide(color: cardBorder),
-                        ),
-                        focusedBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(16),
-                          borderSide: const BorderSide(
-                            color: accent,
-                            width: 1.2,
+            : ListView(
+                padding: const EdgeInsets.fromLTRB(18, 8, 18, 18),
+                children: [
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(
+                        child: Text(
+                          "Journal for $_petNameDisplay",
+                          style: const TextStyle(
+                            fontSize: 28,
+                            fontWeight: FontWeight.w800,
+                            color: titleColor,
+                            height: 1.1,
                           ),
                         ),
                       ),
-                    ),
-
-                    const SizedBox(height: 12),
-
-                    Row(
-                      children: [
-                        Expanded(
-                          child: GestureDetector(
-                            onTap: (_submitting || _uploadingPhoto)
-                                ? null
-                                : _pickDate,
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 14,
-                                vertical: 14,
-                              ),
-                              decoration: BoxDecoration(
-                                color: Colors.white,
-                                borderRadius: BorderRadius.circular(16),
-                                border: Border.all(color: cardBorder),
-                              ),
-                              child: Row(
-                                children: [
-                                  const Icon(
-                                    Icons.event_outlined,
-                                    size: 18,
-                                    color: muted,
-                                  ),
-                                  const SizedBox(width: 8),
-                                  Expanded(
-                                    child: Text(
-                                      _yyyyMmDd(_selectedDay),
-                                      style: const TextStyle(
-                                        fontWeight: FontWeight.w700,
-                                        color: muted,
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 10),
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 10),
+                      const SizedBox(width: 12),
+                      InkWell(
+                        onTap: _openAddPage,
+                        borderRadius: BorderRadius.circular(16),
+                        child: Container(
+                          padding: const EdgeInsets.all(12),
                           decoration: BoxDecoration(
                             color: Colors.white,
                             borderRadius: BorderRadius.circular(16),
                             border: Border.all(color: cardBorder),
                           ),
-                          child: DropdownButtonHideUnderline(
-                            child: DropdownButton<String>(
-                              value: _visibility,
-                              items: const [
-                                DropdownMenuItem(
-                                  value: "shared",
-                                  child: Text("Shared"),
-                                ),
-                                DropdownMenuItem(
-                                  value: "private",
-                                  child: Text("Private"),
-                                ),
-                              ],
-                              onChanged: (_submitting || _uploadingPhoto)
-                                  ? null
-                                  : (v) => setState(
-                                      () => _visibility = v ?? "shared",
-                                    ),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-
-                    const SizedBox(height: 12),
-
-                    _card(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Wrap(
-                            spacing: 8,
-                            runSpacing: 8,
-                            children: [
-                              _tagChip("food", "Food"),
-                              _tagChip("sleep", "Sleep"),
-                              _tagChip("med", "Med"),
-                              _tagChip("symptoms", "Symptoms"),
-                              _tagChip("mood", "Mood"),
-                              _tagChip("activity", "Activity"),
-                            ],
-                          ),
-                          const SizedBox(height: 12),
-                          TextField(
-                            controller: _manualTagCtl,
-                            onChanged: (_) => setState(() {}),
-                            decoration: InputDecoration(
-                              hintText: "Add your own tag",
-                              filled: true,
-                              fillColor: softFill,
-                              prefixIcon: const Icon(
-                                Icons.sell_outlined,
-                                color: muted,
-                                size: 18,
-                              ),
-                              suffixIcon: _manualTagCtl.text.trim().isEmpty
-                                  ? null
-                                  : IconButton(
-                                      onPressed: () {
-                                        _manualTagCtl.clear();
-                                        setState(() {});
-                                      },
-                                      icon: const Icon(Icons.close, size: 18),
-                                    ),
-                              border: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(14),
-                                borderSide: BorderSide.none,
-                              ),
-                              contentPadding: const EdgeInsets.symmetric(
-                                horizontal: 14,
-                                vertical: 14,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-
-                    const SizedBox(height: 12),
-
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 14,
-                        vertical: 6,
-                      ),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(18),
-                        border: Border.all(color: cardBorder),
-                      ),
-                      child: TextField(
-                        controller: _textCtl,
-                        minLines: 6,
-                        maxLines: 10,
-                        keyboardType: TextInputType.multiline,
-                        decoration: const InputDecoration(
-                          border: InputBorder.none,
-                          hintText: "Write a quick note…",
+                          child: const Icon(Icons.add, color: accent, size: 22),
                         ),
                       ),
-                    ),
-
-                    const SizedBox(height: 12),
-
-                    GestureDetector(
-                      onTap: (_submitting || _uploadingPhoto)
-                          ? null
-                          : _pickAndUploadPhoto,
-                      child: Container(
-                        height: 150,
-                        width: double.infinity,
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(18),
-                          border: Border.all(color: cardBorder),
-                        ),
-                        child: _pickedImage == null
-                            ? Container(
-                                margin: const EdgeInsets.all(10),
-                                decoration: BoxDecoration(
-                                  color: softFill,
-                                  borderRadius: BorderRadius.circular(14),
-                                  border: Border.all(color: cardBorder),
-                                ),
-                                child: Column(
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  children: [
-                                    if (_uploadingPhoto)
-                                      const CircularProgressIndicator(
-                                        strokeWidth: 2,
-                                        color: accent,
-                                      )
-                                    else ...[
-                                      const Icon(
-                                        Icons.add_photo_alternate_outlined,
-                                        color: accent,
-                                        size: 32,
-                                      ),
-                                      const SizedBox(height: 8),
-                                      const Text(
-                                        "Add photo",
-                                        style: TextStyle(
-                                          color: muted,
-                                          fontSize: 15,
-                                          fontWeight: FontWeight.w700,
-                                        ),
-                                      ),
-                                    ],
-                                  ],
-                                ),
-                              )
-                            : ClipRRect(
-                                borderRadius: BorderRadius.circular(17),
-                                child: Stack(
-                                  fit: StackFit.expand,
-                                  children: [
-                                    Image.file(
-                                      _pickedImage!,
-                                      fit: BoxFit.cover,
-                                    ),
-                                    if (_uploadingPhoto)
-                                      Container(
-                                        color: Colors.black26,
-                                        child: const Center(
-                                          child: CircularProgressIndicator(
-                                            strokeWidth: 2,
-                                            color: Colors.white,
-                                          ),
-                                        ),
-                                      ),
-                                    Positioned(
-                                      top: 10,
-                                      right: 10,
-                                      child: GestureDetector(
-                                        onTap: _uploadingPhoto
-                                            ? null
-                                            : _removePhoto,
-                                        child: Container(
-                                          width: 32,
-                                          height: 32,
-                                          decoration: const BoxDecoration(
-                                            color: Colors.black54,
-                                            shape: BoxShape.circle,
-                                          ),
-                                          child: const Icon(
-                                            Icons.close,
-                                            size: 18,
-                                            color: Colors.white,
-                                          ),
-                                        ),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                      ),
-                    ),
-
-                    if (_error != null) ...[
-                      const SizedBox(height: 12),
-                      Text(
+                    ],
+                  ),
+                  const SizedBox(height: 14),
+                  _buildTagFilters(),
+                  const SizedBox(height: 14),
+                  if (_error != null)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 12),
+                      child: Text(
                         _error!,
                         style: const TextStyle(
                           color: Colors.redAccent,
                           fontWeight: FontWeight.w600,
                         ),
                       ),
-                    ],
-                  ],
-                ),
+                    ),
+                  if (_loadingEntries)
+                    const Padding(
+                      padding: EdgeInsets.only(top: 80),
+                      child: Center(child: CircularProgressIndicator()),
+                    )
+                  else if (_entries.isEmpty)
+                    _buildEmptyState()
+                  else
+                    ..._entries.map(_buildEntryCard),
+                ],
               ),
       ),
     );
   }
 
-  Widget _tagChip(String value, String label) {
-    final selected = _tag == value && _manualTagCtl.text.trim().isEmpty;
-
-    return InkWell(
-      onTap: (_submitting || _uploadingPhoto)
-          ? null
-          : () {
-              _manualTagCtl.clear();
-              setState(() => _tag = value);
+  Widget _buildTagFilters() {
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: Row(
+        children: [
+          GestureDetector(
+            onTap: () {
+              setState(() => _selectedTag = null);
+              _loadEntries();
             },
-      borderRadius: BorderRadius.circular(999),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-        decoration: BoxDecoration(
-          color: selected ? const Color(0xFFE8DDD5) : chipBg,
-          borderRadius: BorderRadius.circular(999),
-          border: Border.all(
-            color: selected ? accent : Colors.transparent,
-            width: 1.2,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 9),
+              decoration: BoxDecoration(
+                color: _selectedTag == null
+                    ? accent.withValues(alpha: 0.15)
+                    : chipBg,
+                borderRadius: BorderRadius.circular(999),
+                border: Border.all(
+                  color: _selectedTag == null ? accent : Colors.transparent,
+                  width: 1.2,
+                ),
+              ),
+              child: Text(
+                "All",
+                style: TextStyle(
+                  color: _selectedTag == null ? accent : muted,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
           ),
-        ),
-        child: Text(
-          label,
-          style: TextStyle(
-            color: selected ? accent : muted,
-            fontWeight: FontWeight.w700,
-          ),
-        ),
+
+          const SizedBox(width: 8),
+
+          ..._tags.map((tag) {
+            final name = (tag["name"] ?? "").toString().trim();
+            final selected = _selectedTag == name;
+            final color = _parseHexColor(tag["color"]?.toString());
+
+            return Padding(
+              padding: const EdgeInsets.only(right: 8),
+              child: GestureDetector(
+                onTap: () {
+                  setState(() => _selectedTag = name);
+                  _loadEntries();
+                },
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 13,
+                    vertical: 9,
+                  ),
+                  decoration: BoxDecoration(
+                    color: selected
+                        ? color.withValues(alpha: 0.18)
+                        : color.withValues(alpha: 0.05),
+                    borderRadius: BorderRadius.circular(999),
+                    border: Border.all(
+                      color: selected ? color : color.withValues(alpha: 0.5),
+                      width: 1.2,
+                    ),
+                  ),
+                  child: Text(
+                    name,
+                    style: TextStyle(color: color, fontWeight: FontWeight.w700),
+                  ),
+                ),
+              ),
+            );
+          }),
+        ],
       ),
     );
   }
 
-  Widget _card({required Widget child}) {
+  Widget _buildEmptyState() {
     return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 28),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: cardBorder),
+      ),
+      child: Column(
+        children: [
+          const Icon(Icons.menu_book_outlined, size: 34, color: accent),
+          const SizedBox(height: 10),
+          const Text(
+            "No journal entries yet",
+            style: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.w800,
+              color: titleColor,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            "Tap the + button to add one for $_petNameDisplay.",
+            textAlign: TextAlign.center,
+            style: const TextStyle(
+              color: muted,
+              fontSize: 14,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildEntryCard(Map<String, dynamic> entry) {
+    final title = (entry["title"] ?? "").toString().trim();
+    final displayTitle = title.isEmpty ? "Untitled entry" : title;
+
+    final date = _formatDate((entry["entry_date"] ?? "").toString());
+    final photoUrl = (entry["photo_url"] ?? "").toString().trim();
+
+    final author = _authorDisplay(entry);
+
+    final rawTags = entry["tags"];
+    final tags = (rawTags is List)
+        ? rawTags
+              .whereType<dynamic>()
+              .map((e) {
+                if (e is Map<String, dynamic>) return e;
+                if (e is Map) return Map<String, dynamic>.from(e);
+                return <String, dynamic>{};
+              })
+              .where((e) => (e["name"] ?? "").toString().trim().isNotEmpty)
+              .toList()
+        : <Map<String, dynamic>>[];
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(18),
         border: Border.all(color: cardBorder),
       ),
-      child: child,
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // --- TITLE ---
+                Text(
+                  displayTitle,
+                  style: const TextStyle(
+                    fontSize: 17,
+                    fontWeight: FontWeight.w800,
+                    color: Colors.black87,
+                  ),
+                ),
+
+                const SizedBox(height: 4),
+
+                // --- DATE + AUTHOR ---
+                Row(
+                  children: [
+                    Text(
+                      date,
+                      style: const TextStyle(
+                        color: muted,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(width: 5),
+                    Flexible(
+                      child: Text(
+                        "By $author",
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: muted,
+                          fontWeight: FontWeight.w600,
+                          fontSize: 13,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+
+                // --- TAGS ---
+                if (tags.isNotEmpty) ...[
+                  const SizedBox(height: 10),
+                  Wrap(
+                    spacing: 6,
+                    runSpacing: 6,
+                    children: tags.map((tag) {
+                      final name = (tag["name"] ?? "").toString().trim();
+
+                      final color = _parseHexColor(tag["color"]?.toString());
+
+                      return Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 6,
+                        ),
+                        decoration: BoxDecoration(
+                          color: color.withValues(alpha: 0.14),
+                          borderRadius: BorderRadius.circular(999),
+                          border: Border.all(
+                            color: color.withValues(alpha: 0.7),
+                            width: 1.3,
+                          ),
+                        ),
+                        child: Text(
+                          name,
+                          style: TextStyle(
+                            color: color,
+                            fontWeight: FontWeight.w700,
+                            fontSize: 12.5,
+                          ),
+                        ),
+                      );
+                    }).toList(),
+                  ),
+                ],
+
+                const SizedBox(height: 10),
+
+                // --- PREVIEW TEXT ---
+                Text(
+                  _entryPreview(entry),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: muted,
+                    height: 1.35,
+                    fontSize: 14,
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+          // --- IMAGE ---
+          if (photoUrl.isNotEmpty) ...[
+            const SizedBox(width: 12),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(14),
+              child: Image.network(
+                photoUrl,
+                width: 84,
+                height: 84,
+                fit: BoxFit.cover,
+                errorBuilder: (_, _, _) => Container(
+                  width: 84,
+                  height: 84,
+                  color: chipBg,
+                  alignment: Alignment.center,
+                  child: const Icon(Icons.image_not_supported_outlined),
+                ),
+              ),
+            ),
+          ],
+        ],
+      ),
     );
   }
 }

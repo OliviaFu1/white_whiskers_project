@@ -1,7 +1,18 @@
 from django.contrib.auth import get_user_model
+from django.db import transaction
 from rest_framework import serializers
+from pet_calendar.models import JournalTag
 
 User = get_user_model()
+
+DEFAULT_JOURNAL_TAGS = [
+    "food",
+    "sleep",
+    "mood",
+    "activity",
+    "meds",
+    "symptoms",
+]
 
 
 class UserPublicSerializer(serializers.ModelSerializer):
@@ -33,10 +44,18 @@ class UserRegisterSerializer(serializers.ModelSerializer):
 
     def create(self, validated_data):
         password = validated_data.pop("password")
-        user = User(**validated_data)
-        user.set_password(password)
-        user.save()
+
+        with transaction.atomic():
+            user = User(**validated_data)
+            user.set_password(password)
+            user.save()
+
+            JournalTag.objects.bulk_create(
+                [JournalTag(user=user, name=name) for name in DEFAULT_JOURNAL_TAGS]
+            )
+
         return user
+
 
 class UserMeUpdateSerializer(serializers.ModelSerializer):
     class Meta:

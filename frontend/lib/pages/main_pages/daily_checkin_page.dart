@@ -268,7 +268,7 @@ class _DailyCheckinPageState extends State<DailyCheckinPage> {
           width: selected ? 16 : 8,
           height: 8,
           decoration: BoxDecoration(
-            color: selected ? accent : accent.withOpacity(0.28),
+            color: selected ? accent : accent.withValues(alpha: 0.28),
             borderRadius: BorderRadius.circular(999),
           ),
         );
@@ -407,7 +407,7 @@ class _DailyCheckinPageState extends State<DailyCheckinPage> {
                 },
           style: ElevatedButton.styleFrom(
             backgroundColor: accent,
-            disabledBackgroundColor: accent.withOpacity(0.38),
+            disabledBackgroundColor: accent.withValues(alpha: 0.38),
             padding: const EdgeInsets.symmetric(vertical: 14),
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(12),
