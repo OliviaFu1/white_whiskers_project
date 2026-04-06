@@ -171,6 +171,15 @@ class _MypetPageState extends State<MypetPage> {
     }
   }
 
+  String? _assessmentAuthor(Map<String, dynamic>? assessment) {
+    if (assessment == null) return null;
+
+    final ownerName = (assessment["owner_name"] ?? "").toString().trim();
+    if (ownerName.isNotEmpty) return ownerName;
+
+    return null;
+  }
+
   @override
   Widget build(BuildContext context) {
     return SingleChildScrollView(
@@ -564,6 +573,7 @@ class _MypetPageState extends State<MypetPage> {
     final conditionScore = assessment?["condition_score"];
     final assessedAtRaw = assessment?["submitted_at"];
     final assessedAtText = _formatAssessmentDate(assessedAtRaw);
+    final authorText = _assessmentAuthor(assessment);
     final petName = (pet?["name"] ?? "").toString().trim();
     final hasAssessment = assessment != null;
     final scaleScores = _buildScaleScores(assessment);
@@ -602,18 +612,46 @@ class _MypetPageState extends State<MypetPage> {
           child: Row(
             children: [
               SizedBox(
-                width: 84,
-                child: Text(
-                  isLoadingAssessment
-                      ? "Loading..."
-                      : (assessedAtText ?? "No recent\nassessment"),
-                  style: const TextStyle(
-                    color: muted,
-                    fontSize: 16,
-                    height: 1.1,
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
+                width: 92,
+                child: isLoadingAssessment
+                    ? const Text(
+                        "Loading...",
+                        style: TextStyle(
+                          color: muted,
+                          fontSize: 16,
+                          height: 1.1,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      )
+                    : Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            assessedAtText ?? "No records",
+                            style: const TextStyle(
+                              color: muted,
+                              fontSize: 16,
+                              height: 1.1,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                          if (authorText != null) ...[
+                            const SizedBox(height: 4),
+                            Text(
+                              "By $authorText",
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                color: muted,
+                                fontSize: 12.5,
+                                height: 1.2,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
               ),
               const SizedBox(width: 5),
               Expanded(
