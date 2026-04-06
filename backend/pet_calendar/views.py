@@ -7,6 +7,7 @@ from django.db.models import Q
 from django.utils.dateparse import parse_date
 
 from rest_framework import permissions, status, viewsets
+from rest_framework.exceptions import PermissionDenied, ValidationError
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
@@ -72,7 +73,15 @@ class JournalTagViewSet(viewsets.ModelViewSet):
         return JournalTag.objects.filter(user=self.request.user).order_by("name")
 
     def perform_create(self, serializer):
-        serializer.save(user=self.request.user)
+        user = self.request.user
+        current_count = JournalTag.objects.filter(user=user).count()
+
+        if current_count >= 8:
+            raise ValidationError(
+                {"detail": f"You can create up to 8 tags only."}
+            )
+
+        serializer.save(user=user)
 
     def perform_update(self, serializer):
         serializer.save(user=self.request.user)

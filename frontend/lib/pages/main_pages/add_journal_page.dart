@@ -53,6 +53,9 @@ class _AddJournalPageState extends State<AddJournalPage> {
 
   bool get _isEditing => widget.entry != null;
 
+  static const int _maxTags = 8;
+  bool get _canAddMoreTags => _tags.length < _maxTags;
+
   @override
   void initState() {
     super.initState();
@@ -588,7 +591,7 @@ class _AddJournalPageState extends State<AddJournalPage> {
                             runSpacing: 8,
                             children: [
                               ..._tags.map((tag) => _tagChip(tag)),
-                              _addTagButton(),
+                              if (_canAddMoreTags) _addTagButton(),
                             ],
                           ),
                           const SizedBox(height: 8),
@@ -788,7 +791,7 @@ class _AddJournalPageState extends State<AddJournalPage> {
             ),
             const SizedBox(width: 8),
             Text(
-              _capitalize(name),
+              name,
               style: TextStyle(
                 color: selected ? color : muted,
                 fontWeight: FontWeight.w700,
@@ -945,10 +948,5 @@ class _AddJournalPageState extends State<AddJournalPage> {
       ),
       child: child,
     );
-  }
-
-  String _capitalize(String s) {
-    if (s.isEmpty) return s;
-    return s[0].toUpperCase() + s.substring(1);
   }
 }
