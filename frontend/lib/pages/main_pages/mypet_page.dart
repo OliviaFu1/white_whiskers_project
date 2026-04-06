@@ -31,12 +31,16 @@ class _MypetPageState extends State<MypetPage> {
   final Map<int, Map<String, dynamic>?> _assessmentsByPet = {};
   final Set<int> _loadingAssessmentPetIds = {};
 
+  List<Map<String, dynamic>> _pendingInvites = [];
+  bool _inviteDialogShownThisSession = false;
+
   final PageController _pageController = PageController();
 
   @override
   void initState() {
     super.initState();
     _loadPets();
+    _loadPendingInvites();
     selectedPetNotifier.addListener(_onSelectedPetChanged);
   }
 
@@ -189,6 +193,12 @@ class _MypetPageState extends State<MypetPage> {
   }
 
   Widget _content() {
+    final selectedId = selectedPetNotifier.value?.id;
+    final currentPet = selectedId != null
+        ? pets.where((p) => p["id"] == selectedId).firstOrNull
+        : (pets.isNotEmpty ? pets.first : null);
+    final currentRole = (currentPet?["role"] ?? "").toString();
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -204,6 +214,51 @@ class _MypetPageState extends State<MypetPage> {
           ),
         ),
         const SizedBox(height: 14),
+        if (_pendingInvites.isNotEmpty)
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 22),
+            child: Container(
+              padding: const EdgeInsets.all(14),
+              decoration: _cardDecoration(),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    "Pending invitations",
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w700,
+                      color: accent,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  ..._pendingInvites.map((invite) {
+                    final petName = (invite["pet_name"] ?? "A pet").toString();
+                    final inviterName = (invite["inviter_name"] ?? "Someone")
+                        .toString();
+
+                    return ListTile(
+                      contentPadding: EdgeInsets.zero,
+                      title: Text(
+                        petName,
+                        style: const TextStyle(
+                          color: muted,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      subtitle: Text(
+                        "Invited by $inviterName",
+                        style: const TextStyle(color: muted),
+                      ),
+                      trailing: const Icon(Icons.chevron_right, color: muted),
+                      onTap: _showPendingInvitesDialog,
+                    );
+                  }),
+                ],
+              ),
+            ),
+          ),
+        if (_pendingInvites.isNotEmpty) const SizedBox(height: 14),
         if (pets.isEmpty)
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 22),
@@ -211,7 +266,7 @@ class _MypetPageState extends State<MypetPage> {
           )
         else ...[
           SizedBox(
-            height: MediaQuery.sizeOf(context).height * 0.48,
+            height: MediaQuery.sizeOf(context).height * 0.42,
             child: PageView.builder(
               controller: _pageController,
               onPageChanged: _onPageChanged,
@@ -261,11 +316,12 @@ class _MypetPageState extends State<MypetPage> {
                 "Add a new pet",
                 onTap: _handleAddNewPet,
               ),
-              _actionRow(
-                Icons.group_outlined,
-                "Add a family member",
-                onTap: () {},
-              ),
+              if (currentRole == "owner")
+                _actionRow(
+                  Icons.group_outlined,
+                  "Add a family member",
+                  onTap: _handleAddFamilyMember,
+                ),
               _actionRow(
                 Icons.add_circle_outline,
                 "Take a new test",
@@ -361,6 +417,7 @@ class _MypetPageState extends State<MypetPage> {
       if (species.isNotEmpty) species,
       if (sex.isNotEmpty) sex,
     ];
+    final role = (pet["role"] ?? "").toString().trim();
 
     return GestureDetector(
       onTap: () => _handleSeePetDetails(pet),
@@ -379,15 +436,41 @@ class _MypetPageState extends State<MypetPage> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(
-                        petName,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          fontSize: 20,
-                          fontWeight: FontWeight.w700,
-                          color: muted,
-                        ),
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Expanded(
+                            child: Text(
+                              petName,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                fontSize: 20,
+                                fontWeight: FontWeight.w700,
+                                color: muted,
+                              ),
+                            ),
+                          ),
+                          if (role.isNotEmpty)
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 10,
+                                vertical: 4,
+                              ),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFFBF2EB),
+                                borderRadius: BorderRadius.circular(999),
+                              ),
+                              child: Text(
+                                role == "owner" ? "Owner" : "Family",
+                                style: const TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w700,
+                                  color: accent,
+                                ),
+                              ),
+                            ),
+                        ],
                       ),
                       const SizedBox(height: 4),
                       for (final line in infoLines)
@@ -405,10 +488,6 @@ class _MypetPageState extends State<MypetPage> {
             const SizedBox(height: 14),
             const Divider(height: 1, color: Color(0xFFEEE8E2)),
             const SizedBox(height: 10),
-            _petCardRow("Favorite Foods", "—"),
-            const SizedBox(height: 6),
-            _petCardRow("Favorite Activities", "—"),
-            const SizedBox(height: 6),
             _petCardRow("Medication history", "—"),
             const SizedBox(height: 10),
             Align(
@@ -729,6 +808,217 @@ class _MypetPageState extends State<MypetPage> {
       title: Text(label, style: const TextStyle(fontSize: 18, color: muted)),
       onTap: onTap,
     );
+  }
+
+  Future<void> _loadPendingInvites() async {
+    if (!mounted) return;
+
+    try {
+      final invites = await PetsApi.listMyPendingInvites();
+      if (!mounted) return;
+
+      setState(() {
+        _pendingInvites = invites;
+      });
+
+      if (invites.isNotEmpty && !_inviteDialogShownThisSession) {
+        _inviteDialogShownThisSession = true;
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) {
+            _showPendingInvitesDialog();
+          }
+        });
+      }
+    } catch (_) {}
+  }
+
+  Future<void> _handleAddFamilyMember() async {
+    if (pets.isEmpty) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text("Please add a pet first.")));
+      return;
+    }
+
+    final selectedId = selectedPetNotifier.value?.id;
+    final pet = selectedId != null
+        ? pets.firstWhere(
+            (p) => (p["id"] as int?) == selectedId,
+            orElse: () => pets.first,
+          )
+        : pets.first;
+
+    final emailController = TextEditingController();
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text("Add a family member"),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                "Invite someone to join ${(pet["name"] ?? "this pet").toString()} by email.",
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: emailController,
+                keyboardType: TextInputType.emailAddress,
+                autofocus: true,
+                decoration: const InputDecoration(
+                  hintText: "Email address",
+                  border: OutlineInputBorder(),
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text("Cancel"),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(context).pop(true),
+              child: const Text("Send invite"),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (confirmed != true) return;
+
+    final email = emailController.text.trim();
+    if (email.isEmpty) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Please enter an email address.")),
+      );
+      return;
+    }
+
+    try {
+      await PetsApi.createPetInvite(
+        petId: pet["id"] as int,
+        inviteeEmail: email,
+      );
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text("Invite sent.")));
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text("Could not send invite: $e")));
+    }
+  }
+
+  void _showPendingInvitesDialog() {
+    if (_pendingInvites.isEmpty || !mounted) return;
+
+    showDialog<void>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text("Pet invitations"),
+          content: SizedBox(
+            width: 360,
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: _pendingInvites.map((invite) {
+                  final inviteId = invite["id"] as int;
+                  final petName = (invite["pet_name"] ?? "a pet").toString();
+                  final inviterName = (invite["inviter_name"] ?? "Someone")
+                      .toString();
+
+                  return Container(
+                    margin: const EdgeInsets.only(bottom: 12),
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFFBF2EB),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          "$inviterName invited you to join $petName.",
+                          style: const TextStyle(
+                            fontWeight: FontWeight.w600,
+                            color: muted,
+                          ),
+                        ),
+                        const SizedBox(height: 10),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: OutlinedButton(
+                                onPressed: () async {
+                                  Navigator.of(context).pop();
+                                  await _respondToInvite(
+                                    inviteId: inviteId,
+                                    action: "decline",
+                                  );
+                                },
+                                child: const Text("Decline"),
+                              ),
+                            ),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: FilledButton(
+                                onPressed: () async {
+                                  Navigator.of(context).pop();
+                                  await _respondToInvite(
+                                    inviteId: inviteId,
+                                    action: "accept",
+                                  );
+                                },
+                                child: const Text("Join"),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  );
+                }).toList(),
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Future<void> _respondToInvite({
+    required int inviteId,
+    required String action,
+  }) async {
+    try {
+      await PetsApi.respondToInvite(inviteId: inviteId, action: action);
+
+      if (!mounted) return;
+
+      await _loadPendingInvites();
+      await _loadPets();
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            action == "accept" ? "You joined the pet." : "Invitation declined.",
+          ),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("Could not respond to invite: $e")),
+      );
+    }
   }
 
   Future<void> _handleAddNewPet() async {

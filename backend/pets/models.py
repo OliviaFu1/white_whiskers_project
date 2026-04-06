@@ -55,3 +55,49 @@ class PetUser(models.Model):
 
     def __str__(self):
         return f"{self.user} ↔ {self.pet} ({self.role})"
+
+
+class PetInvite(models.Model):
+    class Status(models.TextChoices):
+        PENDING = "pending", "Pending"
+        ACCEPTED = "accepted", "Accepted"
+        DECLINED = "declined", "Declined"
+
+    pet = models.ForeignKey(
+        Pet,
+        on_delete=models.CASCADE,
+        related_name="invites",
+    )
+    inviter = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="sent_pet_invites",
+    )
+    invitee_email = models.EmailField(db_index=True)
+    invitee_user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="received_pet_invites",
+    )
+    status = models.CharField(
+        max_length=10,
+        choices=Status.choices,
+        default=Status.PENDING,
+        db_index=True,
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    responded_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["pet", "invitee_email", "status"],
+                name="uniq_pending_pet_invite_per_email",
+                condition=models.Q(status="pending"),
+            )
+        ]
+
+    def __str__(self):
+        return f"{self.invitee_email} invited to {self.pet} ({self.status})"
