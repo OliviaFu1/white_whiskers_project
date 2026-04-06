@@ -217,48 +217,29 @@ class _MypetPageState extends State<MypetPage> {
         if (_pendingInvites.isNotEmpty)
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 22),
-            child: Container(
-              padding: const EdgeInsets.all(14),
-              decoration: _cardDecoration(),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text(
-                    "Pending invitations",
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.w700,
-                      color: accent,
-                    ),
+            child: Align(
+              alignment: Alignment.centerLeft,
+              child: TextButton.icon(
+                onPressed: _showPendingInvitesDialog,
+                icon: const Icon(Icons.mail_outline, color: accent, size: 18),
+                label: Text(
+                  _pendingInvites.length == 1
+                      ? "1 pending invitation"
+                      : "${_pendingInvites.length} pending invitations",
+                  style: const TextStyle(
+                    color: accent,
+                    fontWeight: FontWeight.w600,
                   ),
-                  const SizedBox(height: 8),
-                  ..._pendingInvites.map((invite) {
-                    final petName = (invite["pet_name"] ?? "A pet").toString();
-                    final inviterName = (invite["inviter_name"] ?? "Someone")
-                        .toString();
-
-                    return ListTile(
-                      contentPadding: EdgeInsets.zero,
-                      title: Text(
-                        petName,
-                        style: const TextStyle(
-                          color: muted,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                      subtitle: Text(
-                        "Invited by $inviterName",
-                        style: const TextStyle(color: muted),
-                      ),
-                      trailing: const Icon(Icons.chevron_right, color: muted),
-                      onTap: _showPendingInvitesDialog,
-                    );
-                  }),
-                ],
+                ),
+                style: TextButton.styleFrom(
+                  padding: EdgeInsets.zero,
+                  minimumSize: const Size(0, 36),
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                ),
               ),
             ),
           ),
-        if (_pendingInvites.isNotEmpty) const SizedBox(height: 14),
+        if (_pendingInvites.isNotEmpty) const SizedBox(height: 8),
         if (pets.isEmpty)
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 22),
@@ -854,33 +835,68 @@ class _MypetPageState extends State<MypetPage> {
       context: context,
       builder: (context) {
         return AlertDialog(
-          title: const Text("Add a family member"),
+          backgroundColor: Colors.white,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(18),
+          ),
+          titlePadding: const EdgeInsets.fromLTRB(20, 18, 20, 0),
+          contentPadding: const EdgeInsets.fromLTRB(20, 12, 20, 0),
+          actionsPadding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
+
+          title: const Text(
+            "Invite family member",
+            style: TextStyle(
+              fontSize: 20,
+              fontWeight: FontWeight.w700,
+              color: titleColor,
+            ),
+          ),
+
           content: Column(
             mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                "Invite someone to join ${(pet["name"] ?? "this pet").toString()} by email.",
+                "Send an invite to join ${(pet["name"] ?? "this pet")}.",
+                style: const TextStyle(color: muted),
               ),
-              const SizedBox(height: 12),
+              const SizedBox(height: 14),
+
               TextField(
                 controller: emailController,
                 keyboardType: TextInputType.emailAddress,
                 autofocus: true,
-                decoration: const InputDecoration(
+                decoration: InputDecoration(
                   hintText: "Email address",
-                  border: OutlineInputBorder(),
+                  filled: true,
+                  fillColor: const Color(0xFFF6EFE9),
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 14,
+                    vertical: 12,
+                  ),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide.none,
+                  ),
                 ),
               ),
             ],
           ),
+
           actions: [
             TextButton(
               onPressed: () => Navigator.of(context).pop(false),
-              child: const Text("Cancel"),
+              child: const Text("Cancel", style: TextStyle(color: muted)),
             ),
             FilledButton(
+              style: FilledButton.styleFrom(
+                backgroundColor: titleColor,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10),
+                ),
+              ),
               onPressed: () => Navigator.of(context).pop(true),
-              child: const Text("Send invite"),
+              child: const Text("Send"),
             ),
           ],
         );
@@ -923,7 +939,18 @@ class _MypetPageState extends State<MypetPage> {
       context: context,
       builder: (context) {
         return AlertDialog(
-          title: const Text("Pet invitations"),
+          backgroundColor: Colors.white,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(18),
+          ),
+          title: const Text(
+            "Invitations",
+            style: TextStyle(
+              fontSize: 20,
+              fontWeight: FontWeight.w700,
+              color: titleColor,
+            ),
+          ),
           content: SizedBox(
             width: 360,
             child: SingleChildScrollView(
@@ -937,26 +964,42 @@ class _MypetPageState extends State<MypetPage> {
 
                   return Container(
                     margin: const EdgeInsets.only(bottom: 12),
-                    padding: const EdgeInsets.all(12),
+                    padding: const EdgeInsets.all(14),
                     decoration: BoxDecoration(
-                      color: const Color(0xFFFBF2EB),
-                      borderRadius: BorderRadius.circular(12),
+                      color: const Color(0xFFF9F5F2), // lighter than before
+                      borderRadius: BorderRadius.circular(14),
                     ),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          "$inviterName invited you to join $petName.",
+                          petName,
                           style: const TextStyle(
-                            fontWeight: FontWeight.w600,
+                            fontWeight: FontWeight.w700,
+                            fontSize: 16,
                             color: muted,
                           ),
                         ),
-                        const SizedBox(height: 10),
+                        const SizedBox(height: 4),
+                        Text(
+                          "Invited by $inviterName",
+                          style: const TextStyle(color: muted, fontSize: 13),
+                        ),
+                        const SizedBox(height: 12),
+
                         Row(
                           children: [
                             Expanded(
                               child: OutlinedButton(
+                                style: OutlinedButton.styleFrom(
+                                  foregroundColor: muted,
+                                  side: const BorderSide(
+                                    color: Color(0xFFD8CFC8),
+                                  ),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(10),
+                                  ),
+                                ),
                                 onPressed: () async {
                                   Navigator.of(context).pop();
                                   await _respondToInvite(
@@ -970,6 +1013,12 @@ class _MypetPageState extends State<MypetPage> {
                             const SizedBox(width: 10),
                             Expanded(
                               child: FilledButton(
+                                style: FilledButton.styleFrom(
+                                  backgroundColor: titleColor,
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(10),
+                                  ),
+                                ),
                                 onPressed: () async {
                                   Navigator.of(context).pop();
                                   await _respondToInvite(
