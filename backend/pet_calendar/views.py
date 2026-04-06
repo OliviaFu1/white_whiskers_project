@@ -83,13 +83,14 @@ class JournalEntryViewSet(viewsets.ModelViewSet):
     permission_classes = [JournalVisibilityPermission]
 
     def get_queryset(self):
+        user = self.request.user
+
         qs = JournalEntry.objects.all().prefetch_related("tags")
 
         pet_id = self.request.query_params.get("pet_id")
         if pet_id:
             qs = qs.filter(pet_id=pet_id)
 
-        # Day filter
         day = parse_date(self.request.query_params.get("date", "") or "")
         if day:
             qs = qs.filter(entry_date=day)
@@ -98,8 +99,14 @@ class JournalEntryViewSet(viewsets.ModelViewSet):
         if tag:
             qs = qs.filter(tags__name=tag)
 
-        user = self.request.user
+        # only entries this user is allowed to see
         qs = qs.filter(Q(visibility="shared") | Q(author=user)).distinct()
+
+        author_filter = (self.request.query_params.get("author_filter") or "all").strip().lower()
+        if author_filter == "mine":
+            qs = qs.filter(author=user)
+        elif author_filter == "others":
+            qs = qs.exclude(author=user)
 
         return qs.order_by("-entry_date", "-created_at")
 

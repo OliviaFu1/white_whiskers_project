@@ -52,6 +52,7 @@ class JournalEntrySerializer(serializers.ModelSerializer):
     author_user_id = serializers.IntegerField(source="author_id", read_only=True)
     author_name = serializers.CharField(source="author.name", read_only=True)
     pet_id = serializers.IntegerField()
+    is_mine = serializers.SerializerMethodField()
 
     tags = JournalTagSerializer(many=True, read_only=True)
     tag_ids = serializers.PrimaryKeyRelatedField(
@@ -69,6 +70,7 @@ class JournalEntrySerializer(serializers.ModelSerializer):
             "pet_id",
             "author_user_id",
             "author_name",
+            "is_mine",
             "entry_date",
             "title",
             "text",
@@ -83,9 +85,14 @@ class JournalEntrySerializer(serializers.ModelSerializer):
             "id",
             "author_user_id",
             "author_name",
+            "is_mine",
             "created_at",
             "updated_at",
         ]
+
+    def get_is_mine(self, obj):
+        request = self.context.get("request")
+        return bool(request and request.user.is_authenticated and obj.author_id == request.user.id)
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)

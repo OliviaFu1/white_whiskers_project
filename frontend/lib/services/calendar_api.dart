@@ -50,11 +50,13 @@ class CalendarApi {
     String? date,
     String? tag,
     String? visibility,
+    String authorFilter = "all",
   }) async {
     final qp = <String, String>{"pet_id": petId.toString()};
     if (date != null) qp["date"] = date;
     if (tag != null) qp["tag"] = tag;
     if (visibility != null) qp["visibility"] = visibility;
+    if (authorFilter != "all") qp["author_filter"] = authorFilter;
 
     final res = await ApiClient.get(
       "/api/calendar/journal-entries/",
@@ -117,6 +119,23 @@ class CalendarApi {
       throw _extractError(res.body) ??
           "Failed to create journal entry (${res.statusCode})";
     }
+    return jsonDecode(res.body) as Map<String, dynamic>;
+  }
+
+  static Future<Map<String, dynamic>> updateJournalEntry({
+    required int id,
+    required Map<String, dynamic> body,
+  }) async {
+    final res = await ApiClient.patch(
+      "/api/calendar/journal-entries/$id/",
+      jsonBody: body,
+    );
+
+    if (res.statusCode < 200 || res.statusCode >= 300) {
+      throw _extractError(res.body) ??
+          "Failed to update journal entry (${res.statusCode})";
+    }
+
     return jsonDecode(res.body) as Map<String, dynamic>;
   }
 

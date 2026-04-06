@@ -1047,6 +1047,8 @@ class _MypetPageState extends State<MypetPage> {
     required int inviteId,
     required String action,
   }) async {
+    final messenger = ScaffoldMessenger.of(context);
+
     try {
       await PetsApi.respondToInvite(inviteId: inviteId, action: action);
 
@@ -1055,7 +1057,9 @@ class _MypetPageState extends State<MypetPage> {
       await _loadPendingInvites();
       await _loadPets();
 
-      ScaffoldMessenger.of(context).showSnackBar(
+      if (!mounted) return;
+
+      messenger.showSnackBar(
         SnackBar(
           content: Text(
             action == "accept" ? "You joined the pet." : "Invitation declined.",
@@ -1064,7 +1068,7 @@ class _MypetPageState extends State<MypetPage> {
       );
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
+      messenger.showSnackBar(
         SnackBar(content: Text("Could not respond to invite: $e")),
       );
     }

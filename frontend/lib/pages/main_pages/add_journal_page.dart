@@ -9,7 +9,9 @@ import 'package:frontend/services/pets_api.dart';
 import 'package:frontend/state/notifiers.dart';
 
 class AddJournalPage extends StatefulWidget {
-  const AddJournalPage({super.key});
+  final Map<String, dynamic>? entry;
+
+  const AddJournalPage({super.key, this.entry});
 
   @override
   State<AddJournalPage> createState() => _AddJournalPageState();
@@ -49,10 +51,40 @@ class _AddJournalPageState extends State<AddJournalPage> {
   final Set<int> _selectedTagIds = {};
   Color _newTagColor = accent;
 
+  bool get _isEditing => widget.entry != null;
+
   @override
   void initState() {
     super.initState();
-    _selectedDay = _dateOnly(DateTime.now());
+
+    final entry = widget.entry;
+    if (entry != null) {
+      final rawDate = (entry["entry_date"] ?? "").toString();
+      DateTime parsedDate;
+      try {
+        parsedDate = _dateOnly(DateTime.parse(rawDate));
+      } catch (_) {
+        parsedDate = _dateOnly(DateTime.now());
+      }
+
+      _selectedDay = parsedDate;
+      _titleCtl.text = (entry["title"] ?? "").toString();
+      _textCtl.text = (entry["text"] ?? "").toString();
+      _visibility = (entry["visibility"] ?? "shared").toString();
+      _photoUrl = (entry["photo_url"] ?? "").toString().trim();
+
+      final rawTags = entry["tags"];
+      if (rawTags is List) {
+        for (final t in rawTags) {
+          if (t is Map && t["id"] is int) {
+            _selectedTagIds.add(t["id"] as int);
+          }
+        }
+      }
+    } else {
+      _selectedDay = _dateOnly(DateTime.now());
+    }
+
     selectedPetNotifier.addListener(_onSelectedPetChanged);
     _init();
   }
@@ -350,12 +382,20 @@ class _AddJournalPageState extends State<AddJournalPage> {
         "tag_ids": _selectedTagIds.toList(),
       };
 
-      await CalendarApi.createJournalEntry(body: body);
+      final entryId = widget.entry?["id"] as int?;
+
+      if (_isEditing && entryId != null) {
+        await CalendarApi.updateJournalEntry(id: entryId, body: body);
+      } else {
+        await CalendarApi.createJournalEntry(body: body);
+      }
 
       if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text("Journal saved.")));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(_isEditing ? "Journal updated." : "Journal saved."),
+        ),
+      );
       Navigator.of(context).pop(true);
     } catch (e) {
       if (!mounted) return;
@@ -404,9 +444,9 @@ class _AddJournalPageState extends State<AddJournalPage> {
                       color: Colors.white,
                     ),
                   )
-                : const Text(
-                    "Save journal entry",
-                    style: TextStyle(
+                : Text(
+                    _isEditing ? "Save changes" : "Save journal entry",
+                    style: const TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.w700,
                       color: Colors.white,
@@ -428,7 +468,9 @@ class _AddJournalPageState extends State<AddJournalPage> {
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                     Text(
-                      "Journal entry for $_petNameDisplay",
+                      _isEditing
+                          ? "Edit journal for $_petNameDisplay"
+                          : "Journal entry for $_petNameDisplay",
                       style: const TextStyle(
                         fontSize: 28,
                         fontWeight: FontWeight.w800,
@@ -600,7 +642,7 @@ class _AddJournalPageState extends State<AddJournalPage> {
                           borderRadius: BorderRadius.circular(18),
                           border: Border.all(color: cardBorder),
                         ),
-                        child: _pickedImage == null
+                        child: _pickedImage == null && _photoUrl.isEmpty
                             ? Container(
                                 margin: const EdgeInsets.all(10),
                                 decoration: BoxDecoration(
@@ -640,10 +682,23 @@ class _AddJournalPageState extends State<AddJournalPage> {
                                 child: Stack(
                                   fit: StackFit.expand,
                                   children: [
-                                    Image.file(
-                                      _pickedImage!,
-                                      fit: BoxFit.cover,
-                                    ),
+                                    _pickedImage != null
+                                        ? Image.file(
+                                            _pickedImage!,
+                                            fit: BoxFit.cover,
+                                          )
+                                        : Image.network(
+                                            _photoUrl,
+                                            fit: BoxFit.cover,
+                                            errorBuilder: (_, _, _) => Container(
+                                              color: chipBg,
+                                              alignment: Alignment.center,
+                                              child: const Icon(
+                                                Icons
+                                                    .image_not_supported_outlined,
+                                              ),
+                                            ),
+                                          ),
                                     if (_uploadingPhoto)
                                       Container(
                                         color: Colors.black26,
