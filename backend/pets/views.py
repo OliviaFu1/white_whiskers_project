@@ -148,3 +148,24 @@ class PetInviteRespondView(APIView):
             PetInviteSerializer(invite).data,
             status=status.HTTP_200_OK,
         )
+
+class PetLeaveView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request, pk):
+        pet = Pet.objects.filter(pk=pk).first()
+        if pet is None:
+            raise NotFound()
+
+        link = PetUser.objects.filter(
+            pet=pet,
+            user=request.user,
+        ).first()
+        if link is None:
+            raise NotFound("You are not linked to this pet.")
+
+        if link.role == PetUser.Role.OWNER:
+            raise PermissionDenied("The owner cannot leave the pet.")
+
+        link.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)

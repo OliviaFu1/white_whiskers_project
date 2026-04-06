@@ -219,7 +219,10 @@ class _CalendarPageState extends State<CalendarPage> {
 
     try {
       final petId = await _getCurrentPetId();
-      final checkins = await CalendarApi.listDailyCheckins(petId: petId);
+      final checkins = await CalendarApi.listDailyCheckins(
+        petId: petId,
+        mineOnly: true,
+      );
 
       final statusMap = <DateTime, DayStatus>{};
       final daysWith = <DateTime>{};

@@ -20,6 +20,8 @@ class DayDetailsPage extends StatefulWidget {
 }
 
 class _DayDetailsPageState extends State<DayDetailsPage> {
+  Map<String, dynamic>? _myCheckin;
+
   static const muted = Color(0xFF676767);
   static const bg = Color(0xFFFBF2EB);
   static const accent = Color(0xFF917869);
@@ -94,15 +96,23 @@ class _DayDetailsPageState extends State<DayDetailsPage> {
         date: yyyyMmDd,
       );
 
+      final myCheckins = await CalendarApi.listDailyCheckins(
+        petId: petId,
+        date: yyyyMmDd,
+        mineOnly: true,
+      );
+
       final journals = await CalendarApi.listJournalEntries(
         petId: petId,
         date: yyyyMmDd,
       );
 
       if (!mounted) return;
+
       setState(() {
         _checkins = checkins;
         _journals = journals;
+        _myCheckin = myCheckins.isNotEmpty ? myCheckins.first : null;
       });
     } catch (e) {
       if (!mounted) return;
@@ -112,7 +122,7 @@ class _DayDetailsPageState extends State<DayDetailsPage> {
     }
   }
 
-  Future<void> _openAddCheckin() async {
+  Future<void> _openCheckinEditor() async {
     if (_isFuture(_currentDay)) return;
 
     final proceed = await _confirmOldCheckinIfNeeded();
@@ -197,12 +207,13 @@ class _DayDetailsPageState extends State<DayDetailsPage> {
                   children: [
                     _sectionTitle("Daily check-in"),
                     const Spacer(),
-                    IconButton(
-                      icon: const Icon(Icons.add),
-                      color: muted,
-                      tooltip: "Add check-in",
-                      onPressed: _openAddCheckin,
-                    ),
+                    if (_myCheckin == null)
+                      IconButton(
+                        icon: const Icon(Icons.add),
+                        color: muted,
+                        tooltip: "Add check-in",
+                        onPressed: _openCheckinEditor,
+                      ),
                   ],
                 ),
                 const SizedBox(height: 8),
@@ -271,6 +282,7 @@ class _DayDetailsPageState extends State<DayDetailsPage> {
     final rating = (c["day_rating"] ?? "neutral").toString();
     final notes = (c["notes"] ?? "").toString().trim();
     final author = _displayAuthor(c);
+    final isMine = _myCheckin != null && c["id"] == _myCheckin!["id"];
 
     return Padding(
       padding: const EdgeInsets.only(bottom: 10),
@@ -292,6 +304,19 @@ class _DayDetailsPageState extends State<DayDetailsPage> {
                     overflow: TextOverflow.ellipsis,
                   ),
                 ),
+                if (isMine)
+                  IconButton(
+                    icon: const Icon(Icons.edit_outlined, size: 20),
+                    color: muted,
+                    tooltip: "Edit check-in",
+                    visualDensity: const VisualDensity(
+                      horizontal: -4,
+                      vertical: -4,
+                    ),
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(),
+                    onPressed: _openCheckinEditor,
+                  ),
               ],
             ),
             if (notes.isNotEmpty) ...[

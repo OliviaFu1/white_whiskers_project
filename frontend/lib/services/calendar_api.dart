@@ -10,9 +10,17 @@ class CalendarApi {
   static Future<List<Map<String, dynamic>>> listDailyCheckins({
     required int petId,
     String? date,
+    bool mineOnly = false,
   }) async {
     final qp = <String, String>{"pet_id": petId.toString()};
-    if (date != null) qp["date"] = date;
+
+    if (date != null) {
+      qp["date"] = date;
+    }
+
+    if (mineOnly) {
+      qp["mine_only"] = "true";
+    }
 
     final res = await ApiClient.get(
       "/api/calendar/daily-checkins/",
@@ -25,10 +33,15 @@ class CalendarApi {
     }
 
     final decoded = jsonDecode(res.body);
-    if (decoded is List) return decoded.cast<Map<String, dynamic>>();
+
+    if (decoded is List) {
+      return decoded.cast<Map<String, dynamic>>();
+    }
+
     if (decoded is Map && decoded["results"] is List) {
       return (decoded["results"] as List).cast<Map<String, dynamic>>();
     }
+
     throw "Unexpected daily-checkins response format";
   }
 

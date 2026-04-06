@@ -10,6 +10,7 @@ from rest_framework import permissions, status, viewsets
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from pets.models import PetUser
 from .models import DailyCheckin, JournalEntry, JournalTag
 from .permissions import JournalVisibilityPermission, IsAuthorForWriteOtherwiseReadOnly
 from .serializers import (
@@ -25,21 +26,41 @@ class DailyCheckinViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthorForWriteOtherwiseReadOnly]
 
     def get_queryset(self):
-        qs = DailyCheckin.objects.all()
+        user = self.request.user
 
-        # For calendar: require pet_id
+        qs = DailyCheckin.objects.filter(
+            pet__petuser__user=user
+        ).distinct()
+
         pet_id = self.request.query_params.get("pet_id")
         if pet_id:
             qs = qs.filter(pet_id=pet_id)
 
-        # Day filter
         day = parse_date(self.request.query_params.get("date", "") or "")
         if day:
             qs = qs.filter(checkin_date=day)
 
+        mine_only = (
+            self.request.query_params.get("mine_only", "").strip().lower()
+            == "true"
+        )
+        if mine_only:
+            qs = qs.filter(author=user)
+
         return qs.order_by("-checkin_date", "-created_at")
 
     def perform_create(self, serializer):
+        pet_id = serializer.validated_data["pet_id"] if "pet_id" in serializer.validated_data else None
+        if pet_id is None:
+            pet_id = serializer.validated_data["pet"].id
+
+        linked = PetUser.objects.filter(
+            pet_id=pet_id,
+            user=self.request.user,
+        ).exists()
+        if not linked:
+            raise PermissionDenied("You are not linked to this pet.")
+
         serializer.save(author=self.request.user)
 
 

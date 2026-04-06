@@ -144,9 +144,7 @@ class PetsApi {
   }) async {
     final res = await ApiClient.post(
       "/api/pets/invites/$inviteId/respond/",
-      jsonBody: {
-        "action": action,
-      },
+      jsonBody: {"action": action},
     );
 
     if (res.statusCode < 200 || res.statusCode >= 300) {
@@ -166,6 +164,15 @@ class PetsApi {
     if (res.statusCode < 200 || res.statusCode >= 300) {
       throw _extractError(res.body) ??
           "Failed to cancel invite (${res.statusCode})";
+    }
+  }
+
+  static Future<void> leavePet(int petId) async {
+    final res = await ApiClient.post("/api/pets/$petId/leave/", jsonBody: {});
+
+    if (res.statusCode != 204) {
+      throw _extractError(res.body) ??
+          "Failed to leave pet (${res.statusCode})";
     }
   }
 
