@@ -32,7 +32,7 @@ class _JournalPageState extends State<JournalPage> {
   List<Map<String, dynamic>> _tags = [];
 
   String? _selectedTag;
-  String _authorFilter = "all";
+  String _authorFilter = "mine";
 
   @override
   void initState() {
@@ -330,7 +330,7 @@ class _JournalPageState extends State<JournalPage> {
   Widget _buildTagFilters() {
     if (_tags.isEmpty) return const SizedBox.shrink();
 
-    final tagsDisabled = _authorFilter == "others";
+    final tagsDisabled = _authorFilter != "mine";
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -392,24 +392,22 @@ class _JournalPageState extends State<JournalPage> {
   }
 
   Widget _buildAuthorFilters() {
+    const filters = ["mine", "others", "all"];
+
     return SingleChildScrollView(
       scrollDirection: Axis.horizontal,
       child: Row(
-        children: [
-          _buildAuthorFilterChip(label: "All", value: "all"),
-          const SizedBox(width: 8),
-          _buildAuthorFilterChip(label: "Mine", value: "mine"),
-          const SizedBox(width: 8),
-          _buildAuthorFilterChip(label: "Others", value: "others"),
-        ],
+        children: filters.map((value) {
+          return Padding(
+            padding: const EdgeInsets.only(right: 8),
+            child: _buildAuthorFilterChip(value),
+          );
+        }).toList(),
       ),
     );
   }
 
-  Widget _buildAuthorFilterChip({
-    required String label,
-    required String value,
-  }) {
+  Widget _buildAuthorFilterChip(String value) {
     final selected = _authorFilter == value;
 
     return GestureDetector(
@@ -419,7 +417,7 @@ class _JournalPageState extends State<JournalPage> {
         setState(() {
           _authorFilter = value;
 
-          if (value == "others") {
+          if (value != "mine") {
             _selectedTag = null;
           }
         });
@@ -437,7 +435,7 @@ class _JournalPageState extends State<JournalPage> {
           ),
         ),
         child: Text(
-          label,
+          value,
           style: TextStyle(
             color: selected ? accent : muted,
             fontWeight: FontWeight.w700,

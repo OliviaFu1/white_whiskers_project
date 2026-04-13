@@ -104,10 +104,6 @@ class JournalEntryViewSet(viewsets.ModelViewSet):
         if day:
             qs = qs.filter(entry_date=day)
 
-        tag = (self.request.query_params.get("tag") or "").strip().lower()
-        if tag:
-            qs = qs.filter(tags__name=tag)
-
         # only entries this user is allowed to see
         qs = qs.filter(Q(visibility="shared") | Q(author=user)).distinct()
 
@@ -116,6 +112,10 @@ class JournalEntryViewSet(viewsets.ModelViewSet):
             qs = qs.filter(author=user)
         elif author_filter == "others":
             qs = qs.exclude(author=user)
+
+        tag = (self.request.query_params.get("tag") or "").strip().lower()
+        if tag:
+            qs = qs.filter(tags__name=tag, author=user)
 
         return qs.order_by("-entry_date", "-created_at")
 
