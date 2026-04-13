@@ -14,6 +14,7 @@ from .serializers import (
     PetInviteCreateSerializer,
     PetInviteSerializer,
     PetInviteRespondSerializer,
+    PetJoinByCodeSerializer,
 )
 
 
@@ -169,3 +170,19 @@ class PetLeaveView(APIView):
 
         link.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
+
+class PetJoinByCodeView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request):
+        serializer = PetJoinByCodeSerializer(
+            data=request.data,
+            context={"request": request},
+        )
+        serializer.is_valid(raise_exception=True)
+        pet = serializer.save()
+
+        return Response(
+            PetSerializer(pet, context={"request": request}).data,
+            status=status.HTTP_200_OK,
+        )

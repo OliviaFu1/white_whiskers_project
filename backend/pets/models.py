@@ -1,5 +1,13 @@
+import secrets
+import string
 from django.db import models
 from django.conf import settings
+
+
+def generate_pet_code(length=8):
+    alphabet = string.ascii_uppercase + string.digits
+    return "".join(secrets.choice(alphabet) for _ in range(length))
+
 
 class Pet(models.Model):
     class Species(models.TextChoices):
@@ -26,8 +34,24 @@ class Pet(models.Model):
 
     weight_kg = models.DecimalField(max_digits=6, decimal_places=2, null=True, blank=True)
 
+    share_code = models.CharField(
+        max_length=12,
+        unique=True,
+        db_index=True,
+        editable=False,
+    )
+
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+
+    def save(self, *args, **kwargs):
+        if not self.share_code:
+            while True:
+                candidate = generate_pet_code()
+                if not Pet.objects.filter(share_code=candidate).exists():
+                    self.share_code = candidate
+                    break
+        super().save(*args, **kwargs)
 
     def is_deceased(self) -> bool:
         return self.date_of_death is not None

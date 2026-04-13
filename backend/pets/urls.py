@@ -7,6 +7,7 @@ from .views import (
     MyPendingPetInvitesView,
     PetInviteRespondView,
     PetLeaveView,
+    PetJoinByCodeView,
 )
 
 urlpatterns = [
@@ -14,7 +15,8 @@ urlpatterns = [
     path("<int:pk>/", PetDetailView.as_view(), name="pet_detail"),
     path("<int:pk>/photo/", PetPhotoView.as_view(), name="pet_photo"),
     path("<int:pk>/leave/", PetLeaveView.as_view(), name="pet_leave"),
-
+    
+    path("join-by-code/", PetJoinByCodeView.as_view(), name="pet_join_by_code"),
     path("invites/", PetInviteCreateView.as_view(), name="pet_invite_create"),
     path("invites/mine/", MyPendingPetInvitesView.as_view(), name="my_pending_pet_invites"),
     path("invites/<int:pk>/respond/", PetInviteRespondView.as_view(), name="pet_invite_respond"),

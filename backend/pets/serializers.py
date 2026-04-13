@@ -11,6 +11,7 @@ class PetSerializer(serializers.ModelSerializer):
     role = serializers.SerializerMethodField(read_only=True)
     photo_url = serializers.SerializerMethodField(read_only=True)
     family_members = serializers.SerializerMethodField(read_only=True)
+    share_code = serializers.SerializerMethodField(read_only=True)
 
     class Meta:
         model = Pet
@@ -29,6 +30,7 @@ class PetSerializer(serializers.ModelSerializer):
             "updated_at",
             "role",
             "family_members",
+            "share_code",
         ]
         read_only_fields = [
             "id",
@@ -37,6 +39,7 @@ class PetSerializer(serializers.ModelSerializer):
             "role",
             "photo_url",
             "family_members",
+            "share_code",
         ]
 
     def get_photo_url(self, obj: Pet):
@@ -66,6 +69,17 @@ class PetSerializer(serializers.ModelSerializer):
             }
             for link in links
         ]
+    
+    def get_share_code(self, obj: Pet):
+        request = self.context.get("request")
+        if not request or not request.user or request.user.is_anonymous:
+            return None
+
+        linked = PetUser.objects.filter(pet=obj, user=request.user).exists()
+        if not linked:
+            return None
+
+        return obj.share_code
 
 
 class PetCreateSerializer(serializers.ModelSerializer):
@@ -216,3 +230,34 @@ class PetInviteRespondSerializer(serializers.Serializer):
         invite.responded_at = timezone.now()
         invite.save(update_fields=["invitee_user", "status", "responded_at"])
         return invite
+
+
+# new onboarding-family flow -- join by shared code
+class PetJoinByCodeSerializer(serializers.Serializer):
+    share_code = serializers.CharField(max_length=12)
+
+    def validate_share_code(self, value):
+        return value.strip().upper()
+
+    def save(self, **kwargs):
+        request = self.context["request"]
+        user = request.user
+        share_code = self.validated_data["share_code"]
+
+        pet = Pet.objects.filter(share_code=share_code).first()
+        if pet is None:
+            raise serializers.ValidationError({"share_code": "Invalid pet code."})
+
+        link = PetUser.objects.filter(pet=pet, user=user).first()
+        if link is not None:
+            raise serializers.ValidationError(
+                {"share_code": "You are already linked to this pet."}
+            )
+
+        PetUser.objects.create(
+            pet=pet,
+            user=user,
+            role=PetUser.Role.FAMILY,
+        )
+
+        return pet
