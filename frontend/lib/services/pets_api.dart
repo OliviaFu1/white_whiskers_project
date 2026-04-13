@@ -192,6 +192,37 @@ class PetsApi {
     return jsonDecode(res.body) as Map<String, dynamic>;
   }
 
+  static Future<Map<String, dynamic>> getFamilyManagement({
+    required int petId,
+  }) async {
+    final res = await ApiClient.get("/api/pets/$petId/family-management/");
+
+    if (res.statusCode < 200 || res.statusCode >= 300) {
+      throw _extractError(res.body) ??
+          "Failed to load family management (${res.statusCode})";
+    }
+
+    return jsonDecode(res.body) as Map<String, dynamic>;
+  }
+
+  static Future<Map<String, dynamic>> updateFamilyMemberRole({
+    required int petId,
+    required int userId,
+    required String role,
+  }) async {
+    final res = await ApiClient.patch(
+      "/api/pets/$petId/family-members/$userId/role/",
+      jsonBody: {"role": role},
+    );
+
+    if (res.statusCode < 200 || res.statusCode >= 300) {
+      throw _extractError(res.body) ??
+          "Failed to update family member role (${res.statusCode})";
+    }
+
+    return jsonDecode(res.body) as Map<String, dynamic>;
+  }
+
   static String? _extractError(String body) {
     try {
       final decoded = jsonDecode(body);

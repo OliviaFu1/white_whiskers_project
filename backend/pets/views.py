@@ -15,6 +15,9 @@ from .serializers import (
     PetInviteSerializer,
     PetInviteRespondSerializer,
     PetJoinByCodeSerializer,
+    PetFamilyMemberManageSerializer,
+    PetPendingInviteManageSerializer,
+    PetUserRoleUpdateSerializer,
 )
 
 
@@ -150,6 +153,29 @@ class PetInviteRespondView(APIView):
             status=status.HTTP_200_OK,
         )
 
+class PetInviteCancelView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request, pk):
+        invite = PetInvite.objects.select_related("pet").filter(pk=pk).first()
+        if invite is None:
+            raise NotFound()
+
+        is_owner = PetUser.objects.filter(
+            pet=invite.pet,
+            user=request.user,
+            role=PetUser.Role.OWNER,
+        ).exists()
+        if not is_owner:
+            raise PermissionDenied("Only an owner can cancel invites.")
+
+        if invite.status != PetInvite.Status.PENDING:
+            raise PermissionDenied("Only pending invites can be canceled.")
+
+        invite.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+
 class PetLeaveView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
@@ -171,6 +197,7 @@ class PetLeaveView(APIView):
         link.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
 
+
 class PetJoinByCodeView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
@@ -184,5 +211,65 @@ class PetJoinByCodeView(APIView):
 
         return Response(
             PetSerializer(pet, context={"request": request}).data,
+            status=status.HTTP_200_OK,
+        )
+
+
+# family member management
+class PetFamilyManagementView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request, pk):
+        pet = Pet.objects.filter(pk=pk).first()
+        if pet is None:
+            raise NotFound()
+
+        link = PetUser.objects.filter(pet=pet, user=request.user).first()
+        if link is None:
+            raise PermissionDenied("You are not linked to this pet.")
+
+        members = (
+            PetUser.objects.filter(pet=pet)
+            .select_related("user")
+            .order_by("created_at")
+        )
+        invites = (
+            PetInvite.objects.filter(pet=pet, status=PetInvite.Status.PENDING)
+            .select_related("invitee_user")
+            .order_by("-created_at")
+        )
+
+        return Response(
+            {
+                "pet_id": pet.id,
+                "pet_name": pet.name,
+                "current_user_role": link.role,
+                "members": PetFamilyMemberManageSerializer(members, many=True, context={"request": request},).data,
+                "invites": PetPendingInviteManageSerializer(invites, many=True).data,
+            }
+        )
+
+
+class PetFamilyMemberRoleUpdateView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def patch(self, request, pk, user_id):
+        pet = Pet.objects.filter(pk=pk).first()
+        if pet is None:
+            raise NotFound()
+
+        serializer = PetUserRoleUpdateSerializer(
+            data=request.data,
+            context={
+                "request": request,
+                "pet": pet,
+                "target_user_id": user_id,
+            },
+        )
+        serializer.is_valid(raise_exception=True)
+        link = serializer.save()
+
+        return Response(
+            PetFamilyMemberManageSerializer(link, context={"request": request}).data,
             status=status.HTTP_200_OK,
         )

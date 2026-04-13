@@ -261,3 +261,99 @@ class PetJoinByCodeSerializer(serializers.Serializer):
         )
 
         return pet
+
+
+# family member management
+class PetFamilyMemberManageSerializer(serializers.ModelSerializer):
+    status = serializers.SerializerMethodField()
+    email = serializers.SerializerMethodField()
+    name = serializers.SerializerMethodField()
+    is_me = serializers.SerializerMethodField()
+
+    class Meta:
+        model = PetUser
+        fields = ["user_id", "name", "email", "role", "status", "is_me"]
+
+    def get_status(self, obj):
+        return "connected"
+
+    def get_email(self, obj):
+        return getattr(obj.user, "email", "")
+
+    def get_name(self, obj):
+        user = obj.user
+
+        name = getattr(user, "name", None)
+        if isinstance(name, str) and name.strip():
+            return name.strip()
+
+        return ""
+
+    def get_is_me(self, obj):
+        request = self.context.get("request")
+        if not request or not request.user or request.user.is_anonymous:
+            return False
+        return obj.user_id == request.user.id
+
+class PetPendingInviteManageSerializer(serializers.ModelSerializer):
+    status = serializers.SerializerMethodField()
+    role = serializers.SerializerMethodField()
+    name = serializers.SerializerMethodField()
+
+    class Meta:
+        model = PetInvite
+        fields = ["id", "invitee_email", "name", "role", "status", "created_at"]
+
+    def get_status(self, obj):
+        return "pending"
+
+    def get_role(self, obj):
+        return "family"
+
+    def get_name(self, obj):
+        user = getattr(obj, "invitee_user", None)
+
+        name = getattr(user, "name", None)
+        if isinstance(name, str) and name.strip():
+            return name.strip()
+
+        return ""
+
+class PetUserRoleUpdateSerializer(serializers.Serializer):
+    role = serializers.ChoiceField(choices=[PetUser.Role.OWNER, PetUser.Role.FAMILY])
+
+    def save(self, **kwargs):
+        pet = self.context["pet"]
+        target_user_id = self.context["target_user_id"]
+        request_user = self.context["request"].user
+
+        is_owner = PetUser.objects.filter(
+            pet=pet,
+            user=request_user,
+            role=PetUser.Role.OWNER,
+        ).exists()
+        if not is_owner:
+            raise serializers.ValidationError("Only an owner can change roles.")
+
+        link = PetUser.objects.filter(
+            pet=pet,
+            user_id=target_user_id,
+        ).first()
+        if link is None:
+            raise serializers.ValidationError("This member is not linked to the pet.")
+
+        new_role = self.validated_data["role"]
+
+        if link.role == PetUser.Role.OWNER and new_role != PetUser.Role.OWNER:
+            owner_count = PetUser.objects.filter(
+                pet=pet,
+                role=PetUser.Role.OWNER,
+            ).count()
+            if owner_count <= 1:
+                raise serializers.ValidationError(
+                    "The last owner cannot be changed to family."
+                )
+
+        link.role = new_role
+        link.save(update_fields=["role"])
+        return link
