@@ -176,6 +176,22 @@ class PetsApi {
     }
   }
 
+  static Future<Map<String, dynamic>> joinPetByCode({
+    required String shareCode,
+  }) async {
+    final res = await ApiClient.post(
+      "/api/pets/join-by-code/",
+      jsonBody: {"share_code": shareCode.trim().toUpperCase()},
+    );
+
+    if (res.statusCode < 200 || res.statusCode >= 300) {
+      throw _extractError(res.body) ??
+          "Failed to join pet by code (${res.statusCode})";
+    }
+
+    return jsonDecode(res.body) as Map<String, dynamic>;
+  }
+
   static String? _extractError(String body) {
     try {
       final decoded = jsonDecode(body);

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import '../../services/pets_api.dart';
 import '../../services/pet_store.dart';
 import '../../services/token_store.dart';
@@ -178,6 +179,25 @@ class _MypetPageState extends State<MypetPage> {
     if (ownerName.isNotEmpty) return ownerName;
 
     return null;
+  }
+
+  bool _isOwner(Map<String, dynamic>? pet) {
+    return (pet?["role"] ?? "").toString().trim() == "owner";
+  }
+
+  String? _shareCodeOf(Map<String, dynamic>? pet) {
+    final value = pet?["share_code"];
+    if (value == null) return null;
+    final code = value.toString().trim();
+    return code.isEmpty ? null : code;
+  }
+
+  Future<void> _copyShareCode(String code) async {
+    await Clipboard.setData(ClipboardData(text: code));
+    if (!mounted) return;
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text("Pet code copied.")));
   }
 
   @override
@@ -397,6 +417,86 @@ class _MypetPageState extends State<MypetPage> {
     );
   }
 
+  Future<void> _showShareCodeDialog(Map<String, dynamic> pet) async {
+    if (!_isOwner(pet)) return;
+
+    final shareCode = _shareCodeOf(pet);
+    if (shareCode == null) return;
+
+    await showDialog<void>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          backgroundColor: Colors.white,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(18),
+          ),
+          title: const Text(
+            "Pet code",
+            style: TextStyle(
+              fontSize: 20,
+              fontWeight: FontWeight.w700,
+              color: titleColor,
+            ),
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 14,
+                  vertical: 16,
+                ),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF8F2ED),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Text(
+                  shareCode,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                    fontSize: 22,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 1.5,
+                    color: accent,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 12),
+              const Text(
+                "Share this code so a family member can join this pet from onboarding.",
+                textAlign: TextAlign.center,
+                style: TextStyle(fontSize: 13, color: muted, height: 1.35),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text("Close", style: TextStyle(color: muted)),
+            ),
+            FilledButton.icon(
+              style: FilledButton.styleFrom(
+                backgroundColor: titleColor,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10),
+                ),
+              ),
+              onPressed: () async {
+                await _copyShareCode(shareCode);
+                if (!context.mounted) return;
+                Navigator.of(context).pop();
+              },
+              icon: const Icon(Icons.copy_rounded, size: 18),
+              label: const Text("Copy"),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
   Widget _petCard(Map<String, dynamic> pet) {
     final petName = (pet["name"] ?? "").toString();
     final breed = (pet["breed_text"] ?? "").toString().trim();
@@ -430,18 +530,42 @@ class _MypetPageState extends State<MypetPage> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Expanded(
-                            child: Text(
-                              petName,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(
-                                fontSize: 20,
-                                fontWeight: FontWeight.w700,
-                                color: muted,
-                              ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Flexible(
+                                  child: Text(
+                                    petName,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: const TextStyle(
+                                      fontSize: 20,
+                                      fontWeight: FontWeight.w700,
+                                      color: muted,
+                                    ),
+                                  ),
+                                ),
+                                if (_isOwner(pet) &&
+                                    _shareCodeOf(pet) != null) ...[
+                                  const SizedBox(width: 6),
+                                  InkWell(
+                                    borderRadius: BorderRadius.circular(999),
+                                    onTap: () => _showShareCodeDialog(pet),
+                                    child: const Padding(
+                                      padding: EdgeInsets.all(2),
+                                      child: Icon(
+                                        Icons.key_rounded,
+                                        size: 18,
+                                        color: accent,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ],
                             ),
                           ),
-                          if (role.isNotEmpty)
+                          if (role.isNotEmpty) ...[
+                            const SizedBox(width: 8),
                             Container(
                               padding: const EdgeInsets.symmetric(
                                 horizontal: 10,
@@ -460,6 +584,7 @@ class _MypetPageState extends State<MypetPage> {
                                 ),
                               ),
                             ),
+                          ],
                         ],
                       ),
                       const SizedBox(height: 4),
@@ -480,11 +605,11 @@ class _MypetPageState extends State<MypetPage> {
             const SizedBox(height: 10),
             _petCardRow("Medication history", "—"),
             const SizedBox(height: 10),
-            Align(
+            const Align(
               alignment: Alignment.centerRight,
               child: Text(
                 "See more →",
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 12,
                   fontWeight: FontWeight.w600,
                   color: titleColor,
@@ -1004,7 +1129,7 @@ class _MypetPageState extends State<MypetPage> {
                     margin: const EdgeInsets.only(bottom: 12),
                     padding: const EdgeInsets.all(14),
                     decoration: BoxDecoration(
-                      color: const Color(0xFFF9F5F2), // lighter than before
+                      color: const Color(0xFFF9F5F2),
                       borderRadius: BorderRadius.circular(14),
                     ),
                     child: Column(
@@ -1173,7 +1298,7 @@ class _MypetPageState extends State<MypetPage> {
 
     if (!mounted) return;
 
-    final result = await Navigator.of(context).push(
+    await Navigator.of(context).push(
       MaterialPageRoute(
         builder: (_) => AssessmentPage(
           petId: petId,
@@ -1187,10 +1312,6 @@ class _MypetPageState extends State<MypetPage> {
 
     // refresh latest assessment after coming back
     await _loadLatestAssessment(petId);
-
-    // optional: if AssessmentPage returns something useful later,
-    // you can use `result` here
-    debugPrint("AssessmentPage returned: $result");
   }
 
   Future<Map<String, dynamic>?> _pickPetForAssessment() async {
