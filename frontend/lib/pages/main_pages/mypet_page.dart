@@ -121,13 +121,19 @@ class _MypetPageState extends State<MypetPage> {
 
       // Always refresh selectedPetNotifier from the new list so photoUrl etc. stay current
       final currentId = selectedPetNotifier.value?.id;
-      final refreshed = currentId != null
-          ? petModels.where((p) => p.id == currentId).firstOrNull
-          : null;
+
+      Pet? refreshed;
+      if (currentId != null) {
+        final matches = petModels.where((p) => p.id == currentId).toList();
+        refreshed = matches.isNotEmpty ? matches.first : null;
+      }
+
       if (refreshed != null) {
         selectedPetNotifier.value = refreshed;
       } else if (petModels.isNotEmpty) {
         selectedPetNotifier.value = petModels.first;
+      } else {
+        selectedPetNotifier.value = null;
       }
 
       // Jump the carousel to the selected pet and load its assessment
