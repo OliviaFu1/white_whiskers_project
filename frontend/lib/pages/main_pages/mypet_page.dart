@@ -222,11 +222,9 @@ class _MypetPageState extends State<MypetPage> {
   }
 
   Widget _content() {
-    final selectedId = selectedPetNotifier.value?.id;
-    final currentPet = selectedId != null
-        ? pets.where((p) => p["id"] == selectedId).firstOrNull
-        : (pets.isNotEmpty ? pets.first : null);
-    final currentRole = (currentPet?["role"] ?? "").toString();
+    final hasOwnedPet = pets.any(
+      (p) => (p["role"] ?? "").toString().trim() == "owner",
+    );
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -326,17 +324,18 @@ class _MypetPageState extends State<MypetPage> {
                 "Add a new pet",
                 onTap: _handleAddNewPet,
               ),
-              if (currentRole == "owner")
+              if (hasOwnedPet)
                 _actionRow(
                   Icons.group_outlined,
                   "Add a family member",
                   onTap: _handleAddFamilyMember,
                 ),
-              _actionRow(
-                Icons.add_circle_outline,
-                "Take a new test",
-                onTap: _handleTakeNewTest,
-              ),
+              if (pets.isNotEmpty)
+                _actionRow(
+                  Icons.add_circle_outline,
+                  "Take a new test",
+                  onTap: _handleTakeNewTest,
+                ),
             ],
           ),
         ),
@@ -984,84 +983,158 @@ class _MypetPageState extends State<MypetPage> {
       return;
     }
 
-    final selectedId = selectedPetNotifier.value?.id;
-    final pet = selectedId != null
-        ? pets.firstWhere(
-            (p) => (p["id"] as int?) == selectedId,
-            orElse: () => pets.first,
-          )
-        : pets.first;
-
     final emailController = TextEditingController();
+    final selectedPetIds = <int>{};
 
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) {
-        return AlertDialog(
-          backgroundColor: Colors.white,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(18),
-          ),
-          titlePadding: const EdgeInsets.fromLTRB(20, 18, 20, 0),
-          contentPadding: const EdgeInsets.fromLTRB(20, 12, 20, 0),
-          actionsPadding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
+        return StatefulBuilder(
+          builder: (context, setModalState) {
+            final ownerPets = pets
+                .where((p) => (p["role"] ?? "").toString() == "owner")
+                .toList();
 
-          title: const Text(
-            "Invite family member",
-            style: TextStyle(
-              fontSize: 20,
-              fontWeight: FontWeight.w700,
-              color: titleColor,
-            ),
-          ),
-
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                "Send an invite to join ${(pet["name"] ?? "this pet")}.",
-                style: const TextStyle(color: muted),
+            return AlertDialog(
+              backgroundColor: Colors.white,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(18),
               ),
-              const SizedBox(height: 14),
+              titlePadding: const EdgeInsets.fromLTRB(20, 18, 20, 0),
+              contentPadding: const EdgeInsets.fromLTRB(20, 12, 20, 0),
+              actionsPadding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
+              title: const Text(
+                "Invite family member",
+                style: TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.w700,
+                  color: titleColor,
+                ),
+              ),
+              content: SizedBox(
+                width: 360,
+                child: SingleChildScrollView(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        "Send an invite by email.",
+                        style: TextStyle(color: muted),
+                      ),
+                      const SizedBox(height: 14),
+                      TextField(
+                        controller: emailController,
+                        keyboardType: TextInputType.emailAddress,
+                        autofocus: true,
+                        decoration: InputDecoration(
+                          hintText: "Email address",
+                          filled: true,
+                          fillColor: const Color(0xFFF6EFE9),
+                          contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 14,
+                            vertical: 12,
+                          ),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            borderSide: BorderSide.none,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      const Divider(height: 1, color: Color(0xFFE7DDD6)),
+                      const SizedBox(height: 14),
+                      const Text(
+                        "Select pets",
+                        style: TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w700,
+                          color: muted,
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      if (ownerPets.isEmpty)
+                        const Text(
+                          "You do not own any pets to invite members to.",
+                          style: TextStyle(color: muted),
+                        )
+                      else
+                        ...ownerPets.map((pet) {
+                          final petId = pet["id"] as int;
+                          final petName = (pet["name"] ?? "").toString().trim();
+                          final isSelected = selectedPetIds.contains(petId);
 
-              TextField(
-                controller: emailController,
-                keyboardType: TextInputType.emailAddress,
-                autofocus: true,
-                decoration: InputDecoration(
-                  hintText: "Email address",
-                  filled: true,
-                  fillColor: const Color(0xFFF6EFE9),
-                  contentPadding: const EdgeInsets.symmetric(
-                    horizontal: 14,
-                    vertical: 12,
-                  ),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    borderSide: BorderSide.none,
+                          return InkWell(
+                            onTap: () {
+                              setModalState(() {
+                                if (selectedPetIds.contains(petId)) {
+                                  selectedPetIds.remove(petId);
+                                } else {
+                                  selectedPetIds.add(petId);
+                                }
+                              });
+                            },
+                            borderRadius: BorderRadius.circular(10),
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(vertical: 6),
+                              child: Row(
+                                children: [
+                                  SizedBox(
+                                    width: 20,
+                                    height: 20,
+                                    child: Checkbox(
+                                      value: isSelected,
+                                      onChanged: (checked) {
+                                        setModalState(() {
+                                          if (checked == true) {
+                                            selectedPetIds.add(petId);
+                                          } else {
+                                            selectedPetIds.remove(petId);
+                                          }
+                                        });
+                                      },
+                                      materialTapTargetSize:
+                                          MaterialTapTargetSize.shrinkWrap,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Expanded(
+                                    child: Text(
+                                      petName.isEmpty ? "Unnamed pet" : petName,
+                                      style: const TextStyle(
+                                        fontSize: 15,
+                                        color: muted,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          );
+                        }),
+                    ],
                   ),
                 ),
               ),
-            ],
-          ),
-
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(false),
-              child: const Text("Cancel", style: TextStyle(color: muted)),
-            ),
-            FilledButton(
-              style: FilledButton.styleFrom(
-                backgroundColor: titleColor,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(10),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(context).pop(false),
+                  child: const Text("Cancel", style: TextStyle(color: muted)),
                 ),
-              ),
-              onPressed: () => Navigator.of(context).pop(true),
-              child: const Text("Send"),
-            ),
-          ],
+                FilledButton(
+                  style: FilledButton.styleFrom(
+                    backgroundColor: titleColor,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                  ),
+                  onPressed: () => Navigator.of(context).pop(true),
+                  child: const Text("Send"),
+                ),
+              ],
+            );
+          },
         );
       },
     );
@@ -1069,6 +1142,7 @@ class _MypetPageState extends State<MypetPage> {
     if (confirmed != true) return;
 
     final email = emailController.text.trim();
+
     if (email.isEmpty) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -1077,16 +1151,27 @@ class _MypetPageState extends State<MypetPage> {
       return;
     }
 
-    try {
-      await PetsApi.createPetInvite(
-        petId: pet["id"] as int,
-        inviteeEmail: email,
+    if (selectedPetIds.isEmpty) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Please select at least one pet.")),
       );
+      return;
+    }
+
+    try {
+      for (final petId in selectedPetIds) {
+        await PetsApi.createPetInvite(petId: petId, inviteeEmail: email);
+      }
 
       if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text("Invite sent.")));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            selectedPetIds.length == 1 ? "Invite sent." : "Invites sent.",
+          ),
+        ),
+      );
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(
@@ -1100,107 +1185,147 @@ class _MypetPageState extends State<MypetPage> {
 
     showDialog<void>(
       context: context,
-      builder: (context) {
-        return AlertDialog(
-          backgroundColor: Colors.white,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(18),
-          ),
-          title: const Text(
-            "Invitations",
-            style: TextStyle(
-              fontSize: 20,
-              fontWeight: FontWeight.w700,
-              color: titleColor,
-            ),
-          ),
-          content: SizedBox(
-            width: 360,
-            child: SingleChildScrollView(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: _pendingInvites.map((invite) {
-                  final inviteId = invite["id"] as int;
-                  final petName = (invite["pet_name"] ?? "a pet").toString();
-                  final inviterName = (invite["inviter_name"] ?? "Someone")
-                      .toString();
-
-                  return Container(
-                    margin: const EdgeInsets.only(bottom: 12),
-                    padding: const EdgeInsets.all(14),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFF9F5F2),
-                      borderRadius: BorderRadius.circular(14),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          petName,
-                          style: const TextStyle(
-                            fontWeight: FontWeight.w700,
-                            fontSize: 16,
-                            color: muted,
-                          ),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          "Invited by $inviterName",
-                          style: const TextStyle(color: muted, fontSize: 13),
-                        ),
-                        const SizedBox(height: 12),
-
-                        Row(
-                          children: [
-                            Expanded(
-                              child: OutlinedButton(
-                                style: OutlinedButton.styleFrom(
-                                  foregroundColor: muted,
-                                  side: const BorderSide(
-                                    color: Color(0xFFD8CFC8),
-                                  ),
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(10),
-                                  ),
-                                ),
-                                onPressed: () async {
-                                  Navigator.of(context).pop();
-                                  await _respondToInvite(
-                                    inviteId: inviteId,
-                                    action: "decline",
-                                  );
-                                },
-                                child: const Text("Decline"),
-                              ),
-                            ),
-                            const SizedBox(width: 10),
-                            Expanded(
-                              child: FilledButton(
-                                style: FilledButton.styleFrom(
-                                  backgroundColor: titleColor,
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(10),
-                                  ),
-                                ),
-                                onPressed: () async {
-                                  Navigator.of(context).pop();
-                                  await _respondToInvite(
-                                    inviteId: inviteId,
-                                    action: "accept",
-                                  );
-                                },
-                                child: const Text("Join"),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
-                  );
-                }).toList(),
+      barrierDismissible: false,
+      builder: (dialogContext) {
+        return StatefulBuilder(
+          builder: (dialogContext, setDialogState) {
+            return AlertDialog(
+              backgroundColor: Colors.white,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(18),
               ),
-            ),
-          ),
+              title: Row(
+                children: [
+                  const Expanded(
+                    child: Text(
+                      "Invitations",
+                      style: TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.w700,
+                        color: titleColor,
+                      ),
+                    ),
+                  ),
+                  IconButton(
+                    onPressed: () => Navigator.of(dialogContext).pop(),
+                    icon: const Icon(Icons.close, color: muted),
+                    splashRadius: 20,
+                  ),
+                ],
+              ),
+              content: SizedBox(
+                width: 360,
+                child: _pendingInvites.isEmpty
+                    ? const Padding(
+                        padding: EdgeInsets.only(top: 8, bottom: 4),
+                        child: Text(
+                          "All invitations have been handled.",
+                          style: TextStyle(color: muted),
+                        ),
+                      )
+                    : SingleChildScrollView(
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: _pendingInvites.map((invite) {
+                            final inviteId = invite["id"] as int;
+                            final petName = (invite["pet_name"] ?? "a pet")
+                                .toString();
+                            final inviterName =
+                                (invite["inviter_name"] ?? "Someone")
+                                    .toString();
+
+                            return Container(
+                              margin: const EdgeInsets.only(bottom: 12),
+                              padding: const EdgeInsets.all(14),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFF9F5F2),
+                                borderRadius: BorderRadius.circular(14),
+                              ),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    petName,
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.w700,
+                                      fontSize: 16,
+                                      color: muted,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    "Invited by $inviterName",
+                                    style: const TextStyle(
+                                      color: muted,
+                                      fontSize: 13,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 12),
+                                  Row(
+                                    children: [
+                                      Expanded(
+                                        child: OutlinedButton(
+                                          style: OutlinedButton.styleFrom(
+                                            foregroundColor: muted,
+                                            side: const BorderSide(
+                                              color: Color(0xFFD8CFC8),
+                                            ),
+                                            shape: RoundedRectangleBorder(
+                                              borderRadius:
+                                                  BorderRadius.circular(10),
+                                            ),
+                                          ),
+                                          onPressed: () async {
+                                            await _respondToInvite(
+                                              inviteId: inviteId,
+                                              action: "decline",
+                                            );
+                                            if (!mounted) return;
+                                            setDialogState(() {});
+                                            if (_pendingInvites.isEmpty &&
+                                                dialogContext.mounted) {
+                                              Navigator.of(dialogContext).pop();
+                                            }
+                                          },
+                                          child: const Text("Decline"),
+                                        ),
+                                      ),
+                                      const SizedBox(width: 10),
+                                      Expanded(
+                                        child: FilledButton(
+                                          style: FilledButton.styleFrom(
+                                            backgroundColor: titleColor,
+                                            shape: RoundedRectangleBorder(
+                                              borderRadius:
+                                                  BorderRadius.circular(10),
+                                            ),
+                                          ),
+                                          onPressed: () async {
+                                            await _respondToInvite(
+                                              inviteId: inviteId,
+                                              action: "accept",
+                                            );
+                                            if (!mounted) return;
+                                            setDialogState(() {});
+                                            if (_pendingInvites.isEmpty &&
+                                                dialogContext.mounted) {
+                                              Navigator.of(dialogContext).pop();
+                                            }
+                                          },
+                                          child: const Text("Join"),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ],
+                              ),
+                            );
+                          }).toList(),
+                        ),
+                      ),
+              ),
+            );
+          },
         );
       },
     );
