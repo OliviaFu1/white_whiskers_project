@@ -1286,11 +1286,15 @@ class _MypetPageState extends State<MypetPage> {
                                               inviteId: inviteId,
                                               action: "decline",
                                             );
-                                            if (!mounted) return;
-                                            setDialogState(() {});
-                                            if (_pendingInvites.isEmpty &&
-                                                dialogContext.mounted) {
+                                            if (!mounted ||
+                                                !dialogContext.mounted) {
+                                              return;
+                                            }
+
+                                            if (_pendingInvites.isEmpty) {
                                               Navigator.of(dialogContext).pop();
+                                            } else {
+                                              setDialogState(() {});
                                             }
                                           },
                                           child: const Text("Decline"),
@@ -1311,11 +1315,15 @@ class _MypetPageState extends State<MypetPage> {
                                               inviteId: inviteId,
                                               action: "accept",
                                             );
-                                            if (!mounted) return;
-                                            setDialogState(() {});
-                                            if (_pendingInvites.isEmpty &&
-                                                dialogContext.mounted) {
+                                            if (!mounted ||
+                                                !dialogContext.mounted) {
+                                              return;
+                                            }
+
+                                            if (_pendingInvites.isEmpty) {
                                               Navigator.of(dialogContext).pop();
+                                            } else {
+                                              setDialogState(() {});
                                             }
                                           },
                                           child: const Text("Join"),

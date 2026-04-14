@@ -202,10 +202,11 @@ class _ManageFamilyMembersPageState extends State<ManageFamilyMembersPage> {
         context,
       ).showSnackBar(SnackBar(content: Text("Could not update role: $e")));
     } finally {
-      if (!mounted) return;
-      setState(() {
-        _updatingUserIds.remove(userId);
-      });
+      if (mounted) {
+        setState(() {
+          _updatingUserIds.remove(userId);
+        });
+      }
     }
   }
 
@@ -254,10 +255,11 @@ class _ManageFamilyMembersPageState extends State<ManageFamilyMembersPage> {
         context,
       ).showSnackBar(SnackBar(content: Text("Could not cancel invite: $e")));
     } finally {
-      if (!mounted) return;
-      setState(() {
-        _cancelingInviteIds.remove(inviteId);
-      });
+      if (mounted) {
+        setState(() {
+          _cancelingInviteIds.remove(inviteId);
+        });
+      }
     }
   }
 
@@ -309,7 +311,7 @@ class _ManageFamilyMembersPageState extends State<ManageFamilyMembersPage> {
 
     return _card(
       child: DropdownButtonFormField<int>(
-        value: _selectedPetId,
+        initialValue: _selectedPetId,
         decoration: InputDecoration(
           labelText: "Pet",
           labelStyle: const TextStyle(color: muted),
@@ -552,9 +554,7 @@ class _ManageFamilyMembersPageState extends State<ManageFamilyMembersPage> {
       ),
       body: _loadingPets
           ? const Center(child: CircularProgressIndicator())
-          : RefreshIndicator(
-              onRefresh: _loadFamilyData,
-              child: ListView(
+          : ListView(
                 padding: const EdgeInsets.all(16),
                 children: [
                   if (_error != null)
@@ -572,37 +572,15 @@ class _ManageFamilyMembersPageState extends State<ManageFamilyMembersPage> {
                     ),
                   _buildPetPicker(),
                   const SizedBox(height: 16),
-                  if (_selectedPetId == null)
-                    _card(
-                      child: const Text(
-                        "Please select a pet.",
-                        style: TextStyle(color: muted),
-                      ),
-                    )
-                  else if (_loadingData)
+                  if (_loadingData)
                     const Padding(
                       padding: EdgeInsets.only(top: 60),
                       child: Center(child: CircularProgressIndicator()),
-                    )
-                  else if (_familyData == null)
-                    _card(
-                      child: const Text(
-                        "Could not load family member data.",
-                        style: TextStyle(color: muted),
-                      ),
-                    )
-                  else if (rows.isEmpty)
-                    _card(
-                      child: const Text(
-                        "No family members or pending invites.",
-                        style: TextStyle(color: muted),
-                      ),
                     )
                   else
                     ...rows.map(_buildMemberCard),
                 ],
               ),
-            ),
     );
   }
 }
