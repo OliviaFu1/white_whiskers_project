@@ -256,6 +256,7 @@ class _JournalPageState extends State<JournalPage> {
   @override
   Widget build(BuildContext context) {
     final isLoading = _loadingPet || _loadingTags;
+    final hasNoPets = !isLoading && pets.isEmpty;
 
     return Scaffold(
       backgroundColor: bg,
@@ -263,6 +264,54 @@ class _JournalPageState extends State<JournalPage> {
         bottom: false,
         child: isLoading
             ? const Center(child: CircularProgressIndicator())
+            : hasNoPets
+            ? Center(
+                child: Padding(
+                  padding: const EdgeInsets.all(24),
+                  child: Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 22,
+                      vertical: 28,
+                    ),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(color: cardBorder),
+                    ),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(
+                          Icons.menu_book_outlined,
+                          size: 38,
+                          color: accent,
+                        ),
+                        const SizedBox(height: 12),
+                        const Text(
+                          "Add a pet to get started",
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            fontSize: 22,
+                            fontWeight: FontWeight.w800,
+                            color: titleColor,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        const Text(
+                          "Once you add a pet, you can write journal entries, organize notes, and see your family’s entries here.",
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            color: muted,
+                            fontSize: 14,
+                            height: 1.35,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              )
             : ListView(
                 padding: const EdgeInsets.fromLTRB(18, 8, 18, 18),
                 children: [

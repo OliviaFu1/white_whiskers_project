@@ -6,6 +6,8 @@ import 'package:frontend/pages/main_pages/day_details_page.dart';
 import 'package:frontend/services/calendar_api.dart';
 import 'package:frontend/services/pet_store.dart';
 import 'package:frontend/state/notifiers.dart';
+import 'package:frontend/services/pets_api.dart';
+import 'package:frontend/models/pet.dart';
 
 enum DayStatus { good, bad, neutral, none }
 
@@ -30,10 +32,13 @@ class _CalendarPageState extends State<CalendarPage> {
   bool _loading = false;
   String? _error;
 
+  bool _loadingPets = true;
+  List<Map<String, dynamic>> _pets = [];
+
   @override
   void initState() {
     super.initState();
-    _loadAllCheckins();
+    _loadPetsAndMaybeCheckins();
     selectedPetNotifier.addListener(_onPetChanged);
   }
 
@@ -44,11 +49,78 @@ class _CalendarPageState extends State<CalendarPage> {
   }
 
   void _onPetChanged() {
+    if (_pets.isEmpty) return;
     _loadAllCheckins();
   }
 
   @override
   Widget build(BuildContext context) {
+    if (_loadingPets) {
+      return Container(
+        color: bg,
+        child: const SafeArea(
+          child: Center(child: CircularProgressIndicator()),
+        ),
+      );
+    }
+
+    if (_pets.isEmpty) {
+      return Container(
+        color: bg,
+        child: SafeArea(
+          child: Center(
+            child: Padding(
+              padding: const EdgeInsets.all(24),
+              child: Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 22,
+                  vertical: 28,
+                ),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(20),
+                  boxShadow: const [
+                    BoxShadow(
+                      blurRadius: 12,
+                      offset: Offset(0, 6),
+                      color: Color(0x14000000),
+                    ),
+                  ],
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(Icons.pets_outlined, size: 40, color: goodColor),
+                    const SizedBox(height: 12),
+                    const Text(
+                      "Add a pet to get started",
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        fontSize: 22,
+                        fontWeight: FontWeight.w800,
+                        color: Color(0xFFD88442),
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    const Text(
+                      "Once you add a pet, you can track daily check-ins, view the calendar, and manage care history here.",
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: Color(0xFF6F6A67),
+                        height: 1.35,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+
     final today = _dateOnly(DateTime.now());
     final hasCheckinToday = _daysWithCheckin.contains(today);
 
@@ -209,6 +281,64 @@ class _CalendarPageState extends State<CalendarPage> {
         ),
       ),
     );
+  }
+
+  Future<void> _loadPetsAndMaybeCheckins() async {
+    setState(() {
+      _loadingPets = true;
+    });
+
+    try {
+      final petList = await PetsApi.listPets();
+      final petModels = petList
+          .map(
+            (p) => Pet(
+              id: p["id"] as int,
+              name: (p["name"] ?? "").toString(),
+              photoUrl: p["photo_url"]?.toString(),
+            ),
+          )
+          .toList();
+
+      petsNotifier.value = petModels;
+
+      final currentId = selectedPetNotifier.value?.id;
+      final refreshed = currentId != null
+          ? petModels.where((p) => p.id == currentId).firstOrNull
+          : null;
+
+      if (refreshed != null) {
+        selectedPetNotifier.value = refreshed;
+        await PetStore.setCurrentPetId(refreshed.id);
+      } else if (petModels.isNotEmpty) {
+        selectedPetNotifier.value = petModels.first;
+        await PetStore.setCurrentPetId(petModels.first.id);
+      }
+
+      if (!mounted) return;
+
+      setState(() {
+        _pets = petList;
+        _loadingPets = false;
+      });
+
+      if (petList.isNotEmpty) {
+        await _loadAllCheckins();
+      } else {
+        setState(() {
+          _statusByDay = {};
+          _daysWithCheckin.clear();
+          _loading = false;
+          _error = null;
+        });
+      }
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _loadingPets = false;
+        _error = e.toString();
+      });
+    }
   }
 
   Future<void> _loadAllCheckins() async {
