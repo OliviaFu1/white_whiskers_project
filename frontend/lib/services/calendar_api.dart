@@ -10,9 +10,17 @@ class CalendarApi {
   static Future<List<Map<String, dynamic>>> listDailyCheckins({
     required int petId,
     String? date,
+    bool mineOnly = false,
   }) async {
     final qp = <String, String>{"pet_id": petId.toString()};
-    if (date != null) qp["date"] = date;
+
+    if (date != null) {
+      qp["date"] = date;
+    }
+
+    if (mineOnly) {
+      qp["mine_only"] = "true";
+    }
 
     final res = await ApiClient.get(
       "/api/calendar/daily-checkins/",
@@ -25,10 +33,15 @@ class CalendarApi {
     }
 
     final decoded = jsonDecode(res.body);
-    if (decoded is List) return decoded.cast<Map<String, dynamic>>();
+
+    if (decoded is List) {
+      return decoded.cast<Map<String, dynamic>>();
+    }
+
     if (decoded is Map && decoded["results"] is List) {
       return (decoded["results"] as List).cast<Map<String, dynamic>>();
     }
+
     throw "Unexpected daily-checkins response format";
   }
 
@@ -37,11 +50,13 @@ class CalendarApi {
     String? date,
     String? tag,
     String? visibility,
+    String authorFilter = "all",
   }) async {
     final qp = <String, String>{"pet_id": petId.toString()};
     if (date != null) qp["date"] = date;
     if (tag != null) qp["tag"] = tag;
     if (visibility != null) qp["visibility"] = visibility;
+    if (authorFilter != "all") qp["author_filter"] = authorFilter;
 
     final res = await ApiClient.get(
       "/api/calendar/journal-entries/",
@@ -104,6 +119,23 @@ class CalendarApi {
       throw _extractError(res.body) ??
           "Failed to create journal entry (${res.statusCode})";
     }
+    return jsonDecode(res.body) as Map<String, dynamic>;
+  }
+
+  static Future<Map<String, dynamic>> updateJournalEntry({
+    required int id,
+    required Map<String, dynamic> body,
+  }) async {
+    final res = await ApiClient.patch(
+      "/api/calendar/journal-entries/$id/",
+      jsonBody: body,
+    );
+
+    if (res.statusCode < 200 || res.statusCode >= 300) {
+      throw _extractError(res.body) ??
+          "Failed to update journal entry (${res.statusCode})";
+    }
+
     return jsonDecode(res.body) as Map<String, dynamic>;
   }
 

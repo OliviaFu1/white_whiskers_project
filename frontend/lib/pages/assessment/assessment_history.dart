@@ -67,6 +67,12 @@ class _AssessmentHistoryPageState extends State<AssessmentHistoryPage> {
     }
   }
 
+  String? _assessmentAuthor(Map<String, dynamic> assessment) {
+    final ownerName = (assessment["owner_name"] ?? "").toString().trim();
+    if (ownerName.isEmpty) return null;
+    return ownerName;
+  }
+
   int _readScore(dynamic value) {
     if (value is int) return value;
     if (value is num) return value.toInt();
@@ -230,6 +236,7 @@ class _AssessmentHistoryPageState extends State<AssessmentHistoryPage> {
     final heartScore = _readScore(assessment["heart_score"]);
     final conditionScore = _readScore(assessment["condition_score"]);
     final dateText = _formatShortDate(assessment["submitted_at"]);
+    final authorText = _assessmentAuthor(assessment);
 
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
@@ -258,15 +265,35 @@ class _AssessmentHistoryPageState extends State<AssessmentHistoryPage> {
           child: Row(
             children: [
               SizedBox(
-                width: 92,
-                child: Text(
-                  dateText,
-                  style: const TextStyle(
-                    color: muted,
-                    fontSize: 15,
-                    height: 1.2,
-                    fontWeight: FontWeight.w500,
-                  ),
+                width: 115,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      dateText,
+                      style: const TextStyle(
+                        color: muted,
+                        fontSize: 15,
+                        height: 1.2,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                    if (authorText != null) ...[
+                      const SizedBox(height: 4),
+                      Text(
+                        "By $authorText",
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: muted,
+                          fontSize: 12.5,
+                          height: 1.2,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ],
+                  ],
                 ),
               ),
               const SizedBox(width: 6),

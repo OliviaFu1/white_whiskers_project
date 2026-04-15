@@ -99,6 +99,130 @@ class PetsApi {
     return jsonDecode(res.body) as Map<String, dynamic>;
   }
 
+  static Future<Map<String, dynamic>> createPetInvite({
+    required int petId,
+    required String inviteeEmail,
+  }) async {
+    final res = await ApiClient.post(
+      "/api/pets/invites/",
+      jsonBody: {
+        "pet": petId,
+        "invitee_email": inviteeEmail.trim().toLowerCase(),
+      },
+    );
+
+    if (res.statusCode < 200 || res.statusCode >= 300) {
+      throw _extractError(res.body) ??
+          "Failed to create invite (${res.statusCode})";
+    }
+
+    return jsonDecode(res.body) as Map<String, dynamic>;
+  }
+
+  static Future<List<Map<String, dynamic>>> listMyPendingInvites() async {
+    final res = await ApiClient.get("/api/pets/invites/mine/");
+
+    if (res.statusCode < 200 || res.statusCode >= 300) {
+      throw _extractError(res.body) ??
+          "Failed to load invites (${res.statusCode})";
+    }
+
+    final decoded = jsonDecode(res.body);
+
+    if (decoded is List) {
+      return decoded.cast<Map<String, dynamic>>();
+    }
+    if (decoded is Map && decoded["results"] is List) {
+      return (decoded["results"] as List).cast<Map<String, dynamic>>();
+    }
+    throw "Unexpected invites response format";
+  }
+
+  static Future<Map<String, dynamic>> respondToInvite({
+    required int inviteId,
+    required String action, // "accept" or "decline"
+  }) async {
+    final res = await ApiClient.post(
+      "/api/pets/invites/$inviteId/respond/",
+      jsonBody: {"action": action},
+    );
+
+    if (res.statusCode < 200 || res.statusCode >= 300) {
+      throw _extractError(res.body) ??
+          "Failed to respond to invite (${res.statusCode})";
+    }
+
+    return jsonDecode(res.body) as Map<String, dynamic>;
+  }
+
+  static Future<void> cancelInvite(int inviteId) async {
+    final res = await ApiClient.post(
+      "/api/pets/invites/$inviteId/cancel/",
+      jsonBody: {},
+    );
+
+    if (res.statusCode < 200 || res.statusCode >= 300) {
+      throw _extractError(res.body) ??
+          "Failed to cancel invite (${res.statusCode})";
+    }
+  }
+
+  static Future<void> leavePet(int petId) async {
+    final res = await ApiClient.post("/api/pets/$petId/leave/", jsonBody: {});
+
+    if (res.statusCode != 204) {
+      throw _extractError(res.body) ??
+          "Failed to leave pet (${res.statusCode})";
+    }
+  }
+
+  static Future<Map<String, dynamic>> joinPetByCode({
+    required String shareCode,
+  }) async {
+    final res = await ApiClient.post(
+      "/api/pets/join-by-code/",
+      jsonBody: {"share_code": shareCode.trim().toUpperCase()},
+    );
+
+    if (res.statusCode < 200 || res.statusCode >= 300) {
+      throw _extractError(res.body) ??
+          "Failed to join pet by code (${res.statusCode})";
+    }
+
+    return jsonDecode(res.body) as Map<String, dynamic>;
+  }
+
+  static Future<Map<String, dynamic>> getFamilyManagement({
+    required int petId,
+  }) async {
+    final res = await ApiClient.get("/api/pets/$petId/family-management/");
+
+    if (res.statusCode < 200 || res.statusCode >= 300) {
+      throw _extractError(res.body) ??
+          "Failed to load family management (${res.statusCode})";
+    }
+
+    return jsonDecode(res.body) as Map<String, dynamic>;
+  }
+
+  static Future<Map<String, dynamic>> updateFamilyMemberRole({
+    required int petId,
+    required int userId,
+    required String role,
+  }) async {
+    final res = await ApiClient.patch(
+      "/api/pets/$petId/family-members/$userId/role/",
+      jsonBody: {"role": role},
+    );
+
+    if (res.statusCode < 200 || res.statusCode >= 300) {
+      throw _extractError(res.body) ??
+          "Failed to update family member role (${res.statusCode})";
+    }
+
+    return jsonDecode(res.body) as Map<String, dynamic>;
+  }
+
   static String? _extractError(String body) {
     try {
       final decoded = jsonDecode(body);

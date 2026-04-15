@@ -1,10 +1,24 @@
+from django.db.models import F
+from django.utils import timezone
+
 from rest_framework import generics, permissions, status
-from rest_framework.exceptions import NotFound
+from rest_framework.exceptions import NotFound, PermissionDenied
 from rest_framework.parsers import MultiPartParser
 from rest_framework.response import Response
-from django.db.models import F
-from .models import Pet, PetUser
-from .serializers import PetSerializer, PetCreateSerializer
+from rest_framework.views import APIView
+
+from .models import Pet, PetUser, PetInvite
+from .serializers import (
+    PetSerializer,
+    PetCreateSerializer,
+    PetInviteCreateSerializer,
+    PetInviteSerializer,
+    PetInviteRespondSerializer,
+    PetJoinByCodeSerializer,
+    PetFamilyMemberManageSerializer,
+    PetPendingInviteManageSerializer,
+    PetUserRoleUpdateSerializer,
+)
 
 
 class PetListCreateView(generics.ListCreateAPIView):
@@ -38,27 +52,224 @@ class PetDetailView(generics.RetrieveUpdateDestroyAPIView):
             petuser__user=self.request.user
         ).distinct()
 
+    def perform_update(self, serializer):
+        pet = self.get_object()
+        is_owner = PetUser.objects.filter(
+            pet=pet,
+            user=self.request.user,
+            role=PetUser.Role.OWNER,
+        ).exists()
+        if not is_owner:
+            raise PermissionDenied("Only the owner can edit this pet.")
+        serializer.save()
+
+    def perform_destroy(self, instance):
+        is_owner = PetUser.objects.filter(
+            pet=instance,
+            user=self.request.user,
+            role=PetUser.Role.OWNER,
+        ).exists()
+        if not is_owner:
+            raise PermissionDenied("Only the owner can delete this pet.")
+        instance.delete()
+
 
 class PetPhotoView(generics.UpdateAPIView):
     permission_classes = [permissions.IsAuthenticated]
     parser_classes = [MultiPartParser]
 
     def get_object(self):
-        pet = Pet.objects.filter(
-            pk=self.kwargs["pk"],
-            petuser__user=self.request.user,
-        ).first()
+        pet = Pet.objects.filter(pk=self.kwargs["pk"]).first()
         if pet is None:
             raise NotFound()
+
+        is_owner = PetUser.objects.filter(
+            pet=pet,
+            user=self.request.user,
+            role=PetUser.Role.OWNER,
+        ).exists()
+        if not is_owner:
+            raise PermissionDenied("Only the owner can update photo.")
+
         return pet
 
     def patch(self, request, *args, **kwargs):
         pet = self.get_object()
         photo = request.FILES.get("photo")
         if not photo:
-            return Response({"error": "No photo provided."}, status=status.HTTP_400_BAD_REQUEST)
+            return Response(
+                {"error": "No photo provided."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
         if pet.photo:
             pet.photo.delete(save=False)
         pet.photo = photo
         pet.save()
         return Response(PetSerializer(pet, context={"request": request}).data)
+
+
+class PetInviteCreateView(generics.CreateAPIView):
+    permission_classes = [permissions.IsAuthenticated]
+    serializer_class = PetInviteCreateSerializer
+
+
+class MyPendingPetInvitesView(generics.ListAPIView):
+    permission_classes = [permissions.IsAuthenticated]
+    serializer_class = PetInviteSerializer
+
+    def get_queryset(self):
+        email = (self.request.user.email or "").strip().lower()
+        return (
+            PetInvite.objects.filter(
+                invitee_email__iexact=email,
+                status=PetInvite.Status.PENDING,
+            )
+            .select_related("pet", "inviter")
+            .order_by("-created_at")
+        )
+
+
+class PetInviteRespondView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request, pk):
+        invite = (
+            PetInvite.objects.select_related("pet", "inviter")
+            .filter(pk=pk)
+            .first()
+        )
+        if invite is None:
+            raise NotFound()
+
+        serializer = PetInviteRespondSerializer(
+            data=request.data,
+            context={"request": request, "invite": invite},
+        )
+        serializer.is_valid(raise_exception=True)
+        invite = serializer.save()
+
+        return Response(
+            PetInviteSerializer(invite).data,
+            status=status.HTTP_200_OK,
+        )
+
+class PetInviteCancelView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request, pk):
+        invite = PetInvite.objects.select_related("pet").filter(pk=pk).first()
+        if invite is None:
+            raise NotFound()
+
+        is_owner = PetUser.objects.filter(
+            pet=invite.pet,
+            user=request.user,
+            role=PetUser.Role.OWNER,
+        ).exists()
+        if not is_owner:
+            raise PermissionDenied("Only an owner can cancel invites.")
+
+        if invite.status != PetInvite.Status.PENDING:
+            raise PermissionDenied("Only pending invites can be canceled.")
+
+        invite.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+class PetLeaveView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request, pk):
+        pet = Pet.objects.filter(pk=pk).first()
+        if pet is None:
+            raise NotFound()
+
+        link = PetUser.objects.filter(
+            pet=pet,
+            user=request.user,
+        ).first()
+        if link is None:
+            raise NotFound("You are not linked to this pet.")
+
+        if link.role == PetUser.Role.OWNER:
+            raise PermissionDenied("The owner cannot leave the pet.")
+
+        link.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+class PetJoinByCodeView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request):
+        serializer = PetJoinByCodeSerializer(
+            data=request.data,
+            context={"request": request},
+        )
+        serializer.is_valid(raise_exception=True)
+        pet = serializer.save()
+
+        return Response(
+            PetSerializer(pet, context={"request": request}).data,
+            status=status.HTTP_200_OK,
+        )
+
+
+# family member management
+class PetFamilyManagementView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request, pk):
+        pet = Pet.objects.filter(pk=pk).first()
+        if pet is None:
+            raise NotFound()
+
+        link = PetUser.objects.filter(pet=pet, user=request.user).first()
+        if link is None:
+            raise PermissionDenied("You are not linked to this pet.")
+
+        members = (
+            PetUser.objects.filter(pet=pet)
+            .select_related("user")
+            .order_by("created_at")
+        )
+        invites = (
+            PetInvite.objects.filter(pet=pet, status=PetInvite.Status.PENDING)
+            .select_related("invitee_user")
+            .order_by("-created_at")
+        )
+
+        return Response(
+            {
+                "pet_id": pet.id,
+                "pet_name": pet.name,
+                "current_user_role": link.role,
+                "members": PetFamilyMemberManageSerializer(members, many=True, context={"request": request},).data,
+                "invites": PetPendingInviteManageSerializer(invites, many=True).data,
+            }
+        )
+
+
+class PetFamilyMemberRoleUpdateView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def patch(self, request, pk, user_id):
+        pet = Pet.objects.filter(pk=pk).first()
+        if pet is None:
+            raise NotFound()
+
+        serializer = PetUserRoleUpdateSerializer(
+            data=request.data,
+            context={
+                "request": request,
+                "pet": pet,
+                "target_user_id": user_id,
+            },
+        )
+        serializer.is_valid(raise_exception=True)
+        link = serializer.save()
+
+        return Response(
+            PetFamilyMemberManageSerializer(link, context={"request": request}).data,
+            status=status.HTTP_200_OK,
+        )

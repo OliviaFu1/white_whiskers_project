@@ -32,6 +32,7 @@ class _JournalPageState extends State<JournalPage> {
   List<Map<String, dynamic>> _tags = [];
 
   String? _selectedTag;
+  String _authorFilter = "mine";
 
   @override
   void initState() {
@@ -139,6 +140,7 @@ class _JournalPageState extends State<JournalPage> {
       final entries = await CalendarApi.listJournalEntries(
         petId: petId,
         tag: _selectedTag,
+        authorFilter: _authorFilter,
       );
 
       if (!mounted) return;
@@ -254,6 +256,7 @@ class _JournalPageState extends State<JournalPage> {
   @override
   Widget build(BuildContext context) {
     final isLoading = _loadingPet || _loadingTags;
+    final hasNoPets = !isLoading && pets.isEmpty;
 
     return Scaffold(
       backgroundColor: bg,
@@ -261,6 +264,54 @@ class _JournalPageState extends State<JournalPage> {
         bottom: false,
         child: isLoading
             ? const Center(child: CircularProgressIndicator())
+            : hasNoPets
+            ? Center(
+                child: Padding(
+                  padding: const EdgeInsets.all(24),
+                  child: Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 22,
+                      vertical: 28,
+                    ),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(color: cardBorder),
+                    ),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(
+                          Icons.menu_book_outlined,
+                          size: 38,
+                          color: accent,
+                        ),
+                        const SizedBox(height: 12),
+                        const Text(
+                          "Add a pet to get started",
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            fontSize: 22,
+                            fontWeight: FontWeight.w800,
+                            color: titleColor,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        const Text(
+                          "Once you add a pet, you can write journal entries, organize notes, and see your family’s entries here.",
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            color: muted,
+                            fontSize: 14,
+                            height: 1.35,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              )
             : ListView(
                 padding: const EdgeInsets.fromLTRB(18, 8, 18, 18),
                 children: [
@@ -295,6 +346,8 @@ class _JournalPageState extends State<JournalPage> {
                     ],
                   ),
                   const SizedBox(height: 14),
+                  _buildAuthorFilters(),
+                  const SizedBox(height: 10),
                   _buildTagFilters(),
                   const SizedBox(height: 14),
                   if (_error != null)
@@ -324,75 +377,119 @@ class _JournalPageState extends State<JournalPage> {
   }
 
   Widget _buildTagFilters() {
+    if (_tags.isEmpty) return const SizedBox.shrink();
+
+    final tagsDisabled = _authorFilter != "mine";
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          child: Opacity(
+            opacity: tagsDisabled ? 0.45 : 1,
+            child: Row(
+              children: _tags.map((tag) {
+                final name = (tag["name"] ?? "").toString().trim();
+                final selected = _selectedTag == name;
+                final color = _parseHexColor(tag["color"]?.toString());
+
+                return Padding(
+                  padding: const EdgeInsets.only(right: 8),
+                  child: GestureDetector(
+                    onTap: tagsDisabled
+                        ? null
+                        : () {
+                            setState(() {
+                              _selectedTag = selected ? null : name;
+                            });
+                            _loadEntries();
+                          },
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 13,
+                        vertical: 9,
+                      ),
+                      decoration: BoxDecoration(
+                        color: selected
+                            ? color.withValues(alpha: 0.18)
+                            : color.withValues(alpha: 0.05),
+                        borderRadius: BorderRadius.circular(999),
+                        border: Border.all(
+                          color: selected
+                              ? color
+                              : color.withValues(alpha: 0.5),
+                          width: 1.2,
+                        ),
+                      ),
+                      child: Text(
+                        name,
+                        style: TextStyle(
+                          color: color,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
+                  ),
+                );
+              }).toList(),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildAuthorFilters() {
+    const filters = ["mine", "others", "all"];
+
     return SingleChildScrollView(
       scrollDirection: Axis.horizontal,
       child: Row(
-        children: [
-          GestureDetector(
-            onTap: () {
-              setState(() => _selectedTag = null);
-              _loadEntries();
-            },
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 9),
-              decoration: BoxDecoration(
-                color: _selectedTag == null
-                    ? accent.withValues(alpha: 0.15)
-                    : chipBg,
-                borderRadius: BorderRadius.circular(999),
-                border: Border.all(
-                  color: _selectedTag == null ? accent : Colors.transparent,
-                  width: 1.2,
-                ),
-              ),
-              child: Text(
-                "All",
-                style: TextStyle(
-                  color: _selectedTag == null ? accent : muted,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-            ),
+        children: filters.map((value) {
+          return Padding(
+            padding: const EdgeInsets.only(right: 8),
+            child: _buildAuthorFilterChip(value),
+          );
+        }).toList(),
+      ),
+    );
+  }
+
+  Widget _buildAuthorFilterChip(String value) {
+    final selected = _authorFilter == value;
+
+    return GestureDetector(
+      onTap: () {
+        if (_authorFilter == value) return;
+
+        setState(() {
+          _authorFilter = value;
+
+          if (value != "mine") {
+            _selectedTag = null;
+          }
+        });
+
+        _loadEntries();
+      },
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 9),
+        decoration: BoxDecoration(
+          color: selected ? accent.withValues(alpha: 0.15) : chipBg,
+          borderRadius: BorderRadius.circular(999),
+          border: Border.all(
+            color: selected ? accent : Colors.transparent,
+            width: 1.2,
           ),
-
-          const SizedBox(width: 8),
-
-          ..._tags.map((tag) {
-            final name = (tag["name"] ?? "").toString().trim();
-            final selected = _selectedTag == name;
-            final color = _parseHexColor(tag["color"]?.toString());
-
-            return Padding(
-              padding: const EdgeInsets.only(right: 8),
-              child: GestureDetector(
-                onTap: () {
-                  setState(() => _selectedTag = name);
-                  _loadEntries();
-                },
-                child: Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 13,
-                    vertical: 9,
-                  ),
-                  decoration: BoxDecoration(
-                    color: selected
-                        ? color.withValues(alpha: 0.18)
-                        : color.withValues(alpha: 0.05),
-                    borderRadius: BorderRadius.circular(999),
-                    border: Border.all(
-                      color: selected ? color : color.withValues(alpha: 0.5),
-                      width: 1.2,
-                    ),
-                  ),
-                  child: Text(
-                    name,
-                    style: TextStyle(color: color, fontWeight: FontWeight.w700),
-                  ),
-                ),
-              ),
-            );
-          }),
-        ],
+        ),
+        child: Text(
+          value,
+          style: TextStyle(
+            color: selected ? accent : muted,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
       ),
     );
   }
@@ -432,6 +529,14 @@ class _JournalPageState extends State<JournalPage> {
     );
   }
 
+  Future<void> _openEditPage(Map<String, dynamic> entry) async {
+    await Navigator.of(context).push<bool>(
+      MaterialPageRoute(builder: (_) => AddJournalPage(entry: entry)),
+    );
+
+    await Future.wait([_loadTags(), _loadEntries()]);
+  }
+
   Widget _buildEntryCard(Map<String, dynamic> entry) {
     final title = (entry["title"] ?? "").toString().trim();
     final displayTitle = title.isEmpty ? "Untitled entry" : title;
@@ -440,6 +545,7 @@ class _JournalPageState extends State<JournalPage> {
     final photoUrl = (entry["photo_url"] ?? "").toString().trim();
 
     final author = _authorDisplay(entry);
+    final isMine = entry["is_mine"] == true;
 
     final rawTags = entry["tags"];
     final tags = (rawTags is List)
@@ -470,13 +576,33 @@ class _JournalPageState extends State<JournalPage> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 // --- TITLE ---
-                Text(
-                  displayTitle,
-                  style: const TextStyle(
-                    fontSize: 17,
-                    fontWeight: FontWeight.w800,
-                    color: Colors.black87,
-                  ),
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(
+                      child: Text(
+                        displayTitle,
+                        style: const TextStyle(
+                          fontSize: 17,
+                          fontWeight: FontWeight.w800,
+                          color: Colors.black87,
+                        ),
+                      ),
+                    ),
+                    if (isMine)
+                      IconButton(
+                        icon: const Icon(Icons.edit_outlined, size: 20),
+                        color: muted,
+                        tooltip: "Edit journal",
+                        visualDensity: const VisualDensity(
+                          horizontal: -4,
+                          vertical: -4,
+                        ),
+                        padding: EdgeInsets.zero,
+                        constraints: const BoxConstraints(),
+                        onPressed: () => _openEditPage(entry),
+                      ),
+                  ],
                 ),
 
                 const SizedBox(height: 4),

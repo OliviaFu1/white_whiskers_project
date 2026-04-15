@@ -1,5 +1,13 @@
+import secrets
+import string
 from django.db import models
 from django.conf import settings
+
+
+def generate_pet_code(length=8):
+    alphabet = string.ascii_uppercase + string.digits
+    return "".join(secrets.choice(alphabet) for _ in range(length))
+
 
 class Pet(models.Model):
     class Species(models.TextChoices):
@@ -21,14 +29,29 @@ class Pet(models.Model):
     sex = models.CharField(max_length=10, choices=Sex.choices, default=Sex.UNKNOWN)
     spayed_neutered = models.BooleanField(null=True, blank=True)
 
-    age_years = models.PositiveSmallIntegerField(null=True, blank=True)
     birthdate = models.DateField(null=True, blank=True)
     date_of_death = models.DateField(null=True, blank=True) # None if still alive
 
     weight_kg = models.DecimalField(max_digits=6, decimal_places=2, null=True, blank=True)
 
+    share_code = models.CharField(
+        max_length=12,
+        unique=True,
+        db_index=True,
+        editable=False,
+    )
+
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+
+    def save(self, *args, **kwargs):
+        if not self.share_code:
+            while True:
+                candidate = generate_pet_code()
+                if not Pet.objects.filter(share_code=candidate).exists():
+                    self.share_code = candidate
+                    break
+        super().save(*args, **kwargs)
 
     def is_deceased(self) -> bool:
         return self.date_of_death is not None
@@ -55,3 +78,49 @@ class PetUser(models.Model):
 
     def __str__(self):
         return f"{self.user} ↔ {self.pet} ({self.role})"
+
+
+class PetInvite(models.Model):
+    class Status(models.TextChoices):
+        PENDING = "pending", "Pending"
+        ACCEPTED = "accepted", "Accepted"
+        DECLINED = "declined", "Declined"
+
+    pet = models.ForeignKey(
+        Pet,
+        on_delete=models.CASCADE,
+        related_name="invites",
+    )
+    inviter = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="sent_pet_invites",
+    )
+    invitee_email = models.EmailField(db_index=True)
+    invitee_user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="received_pet_invites",
+    )
+    status = models.CharField(
+        max_length=10,
+        choices=Status.choices,
+        default=Status.PENDING,
+        db_index=True,
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    responded_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["pet", "invitee_email", "status"],
+                name="uniq_pending_pet_invite_per_email",
+                condition=models.Q(status="pending"),
+            )
+        ]
+
+    def __str__(self):
+        return f"{self.invitee_email} invited to {self.pet} ({self.status})"

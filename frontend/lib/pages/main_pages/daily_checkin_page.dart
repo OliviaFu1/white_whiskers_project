@@ -141,6 +141,7 @@ class _DailyCheckinPageState extends State<DailyCheckinPage> {
         final checkins = await CalendarApi.listDailyCheckins(
           petId: petId,
           date: dayStr,
+          mineOnly: true,
         );
 
         final existing = checkins.isNotEmpty
