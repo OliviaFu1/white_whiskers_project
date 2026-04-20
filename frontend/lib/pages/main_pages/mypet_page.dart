@@ -11,6 +11,7 @@ import '../assessment/assessment_results.dart';
 import '../assessment/assessment_history.dart';
 import 'pet_form_page.dart';
 import 'pet_detail_page.dart';
+import 'manage_vet_page.dart';
 
 class MypetPage extends StatefulWidget {
   const MypetPage({super.key});
@@ -342,6 +343,11 @@ class _MypetPageState extends State<MypetPage> {
                   "Take a new test",
                   onTap: _handleTakeNewTest,
                 ),
+              _actionRow(
+                Icons.local_hospital_outlined,
+                "Manage vet clinic",
+                onTap: _handleManageVetClinic,
+              ),
             ],
           ),
         ),
@@ -1374,6 +1380,12 @@ class _MypetPageState extends State<MypetPage> {
         SnackBar(content: Text("Could not respond to invite: $e")),
       );
     }
+  }
+
+  Future<void> _handleManageVetClinic() async {
+    await Navigator.of(
+      context,
+    ).push(MaterialPageRoute(builder: (_) => const ManageVetPage()));
   }
 
   Future<void> _handleAddNewPet() async {
