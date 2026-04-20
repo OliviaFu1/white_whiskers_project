@@ -3,12 +3,14 @@ from rest_framework.parsers import MultiPartParser
 from rest_framework.response import Response
 from django.contrib.auth import get_user_model
 
+from .models import UserSpecialist
 from .serializers import (
     UserRegisterSerializer,
     UserPublicSerializer,
     UserMeUpdateSerializer,
     ChangeEmailSerializer,
     ChangePasswordSerializer,
+    UserSpecialistSerializer,
 )
 
 User = get_user_model()
@@ -106,3 +108,22 @@ class PhotoUploadView(generics.UpdateAPIView):
             user.save()
         serializer = UserPublicSerializer(user, context={'request': request})
         return Response(serializer.data)
+
+
+class SpecialistListCreateView(generics.ListCreateAPIView):
+    permission_classes = [permissions.IsAuthenticated]
+    serializer_class = UserSpecialistSerializer
+
+    def get_queryset(self):
+        return UserSpecialist.objects.filter(user=self.request.user)
+
+    def perform_create(self, serializer):
+        serializer.save(user=self.request.user)
+
+
+class SpecialistDetailView(generics.RetrieveUpdateDestroyAPIView):
+    permission_classes = [permissions.IsAuthenticated]
+    serializer_class = UserSpecialistSerializer
+
+    def get_queryset(self):
+        return UserSpecialist.objects.filter(user=self.request.user)
