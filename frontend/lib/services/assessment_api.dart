@@ -78,6 +78,41 @@ class AssessmentApi {
     }
   }
 
+  static Future<List<Map<String, dynamic>>> listShareRecipients() async {
+    final res = await ApiClient.get("/api/accounts/share-recipients/");
+
+    if (res.statusCode < 200 || res.statusCode >= 300) {
+      throw _extractError(res.body) ??
+          "Failed to load share recipients (${res.statusCode})";
+    }
+
+    final decoded = jsonDecode(res.body);
+    if (decoded is List) {
+      return decoded.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+    }
+    if (decoded is Map && decoded["results"] is List) {
+      return (decoded["results"] as List)
+          .map((e) => Map<String, dynamic>.from(e as Map))
+          .toList();
+    }
+    throw "Unexpected share recipients response format";
+  }
+
+  static Future<void> shareAssessment({
+    required int assessmentId,
+    required Map<String, dynamic> body,
+  }) async {
+    final res = await ApiClient.post(
+      "/api/assessments/$assessmentId/share/",
+      jsonBody: body,
+    );
+
+    if (res.statusCode < 200 || res.statusCode >= 300) {
+      throw _extractError(res.body) ??
+          "Failed to share assessment (${res.statusCode})";
+    }
+  }
+
   static String? _extractError(String body) {
     try {
       final decoded = jsonDecode(body);

@@ -50,10 +50,5 @@ class ShareAssessmentSerializer(serializers.Serializer):
     )
 
     all_time_good_pct = serializers.IntegerField(required=False, allow_null=True)
-    all_time_checkin_count = serializers.IntegerField(required=False, allow_null=True)
-
     past_28_days_good_pct = serializers.IntegerField(required=False, allow_null=True)
-    past_28_days_checkin_count = serializers.IntegerField(required=False, allow_null=True)
-
     past_7_days_good_pct = serializers.IntegerField(required=False, allow_null=True)
-    past_7_days_checkin_count = serializers.IntegerField(required=False, allow_null=True)
