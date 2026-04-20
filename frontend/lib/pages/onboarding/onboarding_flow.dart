@@ -7,9 +7,8 @@ import 'package:frontend/pages/assessment/assessment_page.dart';
 import 'package:frontend/services/pet_store.dart';
 import 'package:frontend/state/notifiers.dart';
 import 'onboarding_widget.dart';
-import '../../services/auth_api.dart';
 import '../../services/pets_api.dart';
-import '../../services/token_store.dart';
+import '../../services/account_api.dart';
 
 enum AgeInputMode { age, birthdate }
 
@@ -114,13 +113,7 @@ class _OnboardingFlowState extends State<OnboardingFlow> {
     });
 
     try {
-      final access = await TokenStore.readAccess();
-      if (access == null) throw "Session expired. Please log in again.";
-
-      final data = await AuthApi.updateMe(
-        accessToken: access,
-        name: ownerName.text.trim(),
-      );
+      final data = await AccountApi.updateMe(name: ownerName.text.trim());
       userNotifier.value = User.fromJson(data);
 
       if (!mounted) return;
@@ -181,26 +174,23 @@ class _OnboardingFlowState extends State<OnboardingFlow> {
       }
 
       // Reload user and pets into notifiers so AppShell has fresh data.
-      final access2 = await TokenStore.readAccess();
-      if (access2 != null) {
-        final userData = await AuthApi.me(accessToken: access2);
-        userNotifier.value = User.fromJson(userData);
+      final userData = await AccountApi.getMe();
+      userNotifier.value = User.fromJson(userData);
 
-        final rawPets = await PetsApi.listPets();
-        if (rawPets.isNotEmpty) {
-          await PetStore.setCurrentPetId(rawPets.first["id"] as int);
-          final pets = rawPets
-              .map(
-                (p) => Pet(
-                  id: p["id"] as int,
-                  name: (p["name"] ?? "Pet") as String,
-                  photoUrl: p["photo_url"]?.toString(),
-                ),
-              )
-              .toList();
-          petsNotifier.value = pets;
-          selectedPetNotifier.value = pets.first;
-        }
+      final rawPets = await PetsApi.listPets();
+      if (rawPets.isNotEmpty) {
+        await PetStore.setCurrentPetId(rawPets.first["id"] as int);
+        final pets = rawPets
+            .map(
+              (p) => Pet(
+                id: p["id"] as int,
+                name: (p["name"] ?? "Pet").toString(),
+                photoUrl: p["photo_url"]?.toString(),
+              ),
+            )
+            .toList();
+        petsNotifier.value = pets;
+        selectedPetNotifier.value = pets.first;
       }
 
       if (!mounted) return;
@@ -227,35 +217,35 @@ class _OnboardingFlowState extends State<OnboardingFlow> {
   }
 
   Future<void> _reloadUserAndPetsAndGoHome({int? preferredPetId}) async {
-    final access = await TokenStore.readAccess();
-    if (access != null) {
-      final userData = await AuthApi.me(accessToken: access);
-      userNotifier.value = User.fromJson(userData);
+    final userData = await AccountApi.getMe();
+    userNotifier.value = User.fromJson(userData);
 
-      final rawPets = await PetsApi.listPets();
-      if (rawPets.isNotEmpty) {
-        final pets = rawPets
-            .map(
-              (p) => Pet(
-                id: p["id"] as int,
-                name: (p["name"] ?? "Pet").toString(),
-                photoUrl: p["photo_url"]?.toString(),
-              ),
+    final rawPets = await PetsApi.listPets();
+    if (rawPets.isNotEmpty) {
+      final pets = rawPets
+          .map(
+            (p) => Pet(
+              id: p["id"] as int,
+              name: (p["name"] ?? "Pet").toString(),
+              photoUrl: p["photo_url"]?.toString(),
+            ),
+          )
+          .toList();
+
+      petsNotifier.value = pets;
+
+      final selected = preferredPetId != null
+          ? pets.firstWhere(
+              (p) => p.id == preferredPetId,
+              orElse: () => pets.first,
             )
-            .toList();
+          : pets.first;
 
-        petsNotifier.value = pets;
-
-        final selected = preferredPetId != null
-            ? pets.firstWhere(
-                (p) => p.id == preferredPetId,
-                orElse: () => pets.first,
-              )
-            : pets.first;
-
-        await PetStore.setCurrentPetId(selected.id);
-        selectedPetNotifier.value = selected;
-      }
+      await PetStore.setCurrentPetId(selected.id);
+      selectedPetNotifier.value = selected;
+    } else {
+      petsNotifier.value = [];
+      selectedPetNotifier.value = null;
     }
 
     if (!mounted) return;

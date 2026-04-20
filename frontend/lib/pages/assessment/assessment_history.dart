@@ -245,13 +245,22 @@ class _AssessmentHistoryPageState extends State<AssessmentHistoryPage> {
           await Navigator.of(context).push(
             MaterialPageRoute(
               builder: (_) => AssessmentResultsPage(
+                petId: widget.petId,
+                assessmentId: _readScore(assessment["id"]),
                 petName: widget.petName,
+                doneByName: _assessmentAuthor(assessment) ?? "Owner",
+                completedAt:
+                    DateTime.tryParse(
+                      (assessment["submitted_at"] ?? "").toString(),
+                    ) ??
+                    DateTime.now(),
                 heartScore: heartScore,
                 conditionScore: conditionScore,
                 significantlyChallenged: _hasSignificantlyChallengedFlag(
                   assessment,
                 ),
                 scaleScores: _buildScaleScores(assessment),
+                canShare: (assessment["can_share"] ?? false) == true,
                 onDone: () {
                   Navigator.of(context).pop();
                 },

@@ -2,6 +2,7 @@ from django.contrib.auth import get_user_model
 from django.db import transaction
 from rest_framework import serializers
 from pet_calendar.models import JournalTag
+from .models import UserSpecialist
 
 User = get_user_model()
 
@@ -15,9 +16,25 @@ DEFAULT_JOURNAL_TAGS = [
 ]
 
 
+class UserSpecialistSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = UserSpecialist
+        fields = (
+            "id",
+            "clinic_name",
+            "vet_name",
+            "vet_email",
+            "specialty",
+            "created_at",
+            "updated_at",
+        )
+        read_only_fields = ("id", "created_at", "updated_at")
+
+
 class UserPublicSerializer(serializers.ModelSerializer):
     """Safe fields to return to the client."""
     photo_url = serializers.SerializerMethodField()
+    specialists = UserSpecialistSerializer(many=True, read_only=True)
 
     def get_photo_url(self, obj):
         request = self.context.get('request')
@@ -27,7 +44,20 @@ class UserPublicSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = User
-        fields = ("id", "email", "name", "last_name", "photo_url", "location", "created_at", "updated_at")
+        fields = (
+            "id",
+            "email",
+            "name",
+            "last_name",
+            "photo_url",
+            "location",
+            "primary_clinic",
+            "primary_vet_name",
+            "primary_vet_email",
+            "specialists",
+            "created_at",
+            "updated_at",
+        )
         read_only_fields = ("id", "email", "created_at", "updated_at")
 
 
@@ -60,7 +90,14 @@ class UserRegisterSerializer(serializers.ModelSerializer):
 class UserMeUpdateSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
-        fields = ("name", "last_name", "location")
+        fields = (
+            "name",
+            "last_name",
+            "location",
+            "primary_clinic",
+            "primary_vet_name",
+            "primary_vet_email",
+        )
 
 
 class ChangeEmailSerializer(serializers.Serializer):
