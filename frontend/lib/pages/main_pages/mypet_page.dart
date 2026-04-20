@@ -726,13 +726,18 @@ class _MypetPageState extends State<MypetPage> {
                     assessmentId: _readScore(assessment["id"]),
                     petName: petName.isEmpty ? "Your pet" : petName,
                     doneByName: _assessmentAuthor(assessment) ?? "Owner",
-                    completedAt: assessment["submitted_at"],
+                    completedAt:
+                        DateTime.tryParse(
+                          (assessment["submitted_at"] ?? "").toString(),
+                        ) ??
+                        DateTime.now(),
                     heartScore: _readScore(heartScore),
                     conditionScore: _readScore(conditionScore),
                     significantlyChallenged: _hasSignificantlyChallengedFlag(
                       assessment,
                     ),
                     scaleScores: scaleScores,
+                    canShare: (assessment["can_share"] ?? false) == true,
                     onDone: () {
                       Navigator.of(context).pop();
                     },

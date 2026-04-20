@@ -127,3 +127,56 @@ class SpecialistDetailView(generics.RetrieveUpdateDestroyAPIView):
 
     def get_queryset(self):
         return UserSpecialist.objects.filter(user=self.request.user)
+
+
+class ShareRecipientsView(generics.GenericAPIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request, *args, **kwargs):
+        recipients = []
+
+        primary_email = (request.user.primary_vet_email or "").strip()
+        primary_name = (request.user.primary_vet_name or "").strip()
+        primary_clinic = (request.user.primary_clinic or "").strip()
+
+        if primary_email:
+            label = "Primary Vet"
+            if primary_name:
+                label += f" — {primary_name}"
+            elif primary_clinic:
+                label += f" — {primary_clinic}"
+
+            recipients.append({
+                "id": 0,
+                "type": "primary",
+                "label": label,
+                "name": primary_name or "Primary Vet",
+                "email": primary_email,
+                "clinic_name": primary_clinic,
+            })
+
+        specialists = UserSpecialist.objects.filter(user=request.user).order_by("created_at")
+        for specialist in specialists:
+            email = (specialist.vet_email or "").strip()
+            if not email:
+                continue
+
+            name = (specialist.vet_name or "").strip() or "Specialist"
+            clinic_name = (specialist.clinic_name or "").strip()
+            specialty = (specialist.specialty or "").strip()
+
+            label = f"Specialist — {name}"
+            if specialty:
+                label += f" ({specialty})"
+
+            recipients.append({
+                "id": specialist.id,
+                "type": "specialist",
+                "label": label,
+                "name": name,
+                "email": email,
+                "clinic_name": clinic_name,
+                "specialty": specialty,
+            })
+
+        return Response(recipients, status=status.HTTP_200_OK)

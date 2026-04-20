@@ -8,6 +8,7 @@ from .views import (
     ChangePasswordView,
     SpecialistListCreateView,
     SpecialistDetailView,
+    ShareRecipientsView,
 )
 
 urlpatterns = [
@@ -19,6 +20,7 @@ urlpatterns = [
 
     path("me/specialists/", SpecialistListCreateView.as_view(), name="me-specialists"),
     path("me/specialists/<int:pk>/", SpecialistDetailView.as_view(), name="me-specialist-detail"),
+    path("share-recipients/", ShareRecipientsView.as_view(), name="share-recipients"),
 
     # login + refresh
     path("token/", TokenObtainPairView.as_view(), name="token_obtain_pair"),
