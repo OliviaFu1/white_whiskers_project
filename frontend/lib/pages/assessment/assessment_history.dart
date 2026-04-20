@@ -245,7 +245,11 @@ class _AssessmentHistoryPageState extends State<AssessmentHistoryPage> {
           await Navigator.of(context).push(
             MaterialPageRoute(
               builder: (_) => AssessmentResultsPage(
+                petId: widget.petId,
+                assessmentId: _readScore(assessment["id"]),
                 petName: widget.petName,
+                doneByName: _assessmentAuthor(assessment) ?? "Owner",
+                completedAt: assessment["submitted_at"],
                 heartScore: heartScore,
                 conditionScore: conditionScore,
                 significantlyChallenged: _hasSignificantlyChallengedFlag(

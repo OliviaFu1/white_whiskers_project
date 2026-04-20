@@ -722,9 +722,13 @@ class _MypetPageState extends State<MypetPage> {
               await Navigator.of(context).push(
                 MaterialPageRoute(
                   builder: (_) => AssessmentResultsPage(
+                    petId: petId ?? 0,
+                    assessmentId: _readScore(assessment["id"]),
                     petName: petName.isEmpty ? "Your pet" : petName,
-                    heartScore: heartScore,
-                    conditionScore: conditionScore,
+                    doneByName: _assessmentAuthor(assessment) ?? "Owner",
+                    completedAt: assessment["submitted_at"],
+                    heartScore: _readScore(heartScore),
+                    conditionScore: _readScore(conditionScore),
                     significantlyChallenged: _hasSignificantlyChallengedFlag(
                       assessment,
                     ),
