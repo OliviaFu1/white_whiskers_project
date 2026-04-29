@@ -1,5 +1,10 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
+import 'package:frontend/pages/medication/medication_page.dart';
+import 'package:frontend/services/notification_service.dart';
 import 'package:frontend/services/notifications_service.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:frontend/state/auth_state.dart';
 import 'package:frontend/state/notifiers.dart';
 import 'package:frontend/models/app_notification.dart';
@@ -19,14 +24,99 @@ class AppShell extends StatefulWidget {
   State<AppShell> createState() => _AppShellState();
 }
 
-class _AppShellState extends State<AppShell> {
+class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
   final NotificationRefresher _refresher = NotificationRefresher();
+
+  /// Pet id from a notification payload that arrived before pets were loaded.
+  /// Applied and cleared by [_applyPendingPetId] once petsNotifier has values.
+  int? _pendingPetId;
 
   @override
   void initState() {
     super.initState();
     _refresher.start();
+    WidgetsBinding.instance.addObserver(this);
     AuthState.instance.addListener(_authListener);
+    pendingMedicationNavigation.addListener(_onMedicationNavigation);
+    petsNotifier.addListener(_applyPendingPetId);
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      // Await so SharedPreferences writes from onNotificationTap complete
+      // before _checkPendingNavigation tries to read them (cold-launch fix).
+      await NotificationService.handlePendingLaunch();
+      await _checkPendingNavigation();
+    });
+  }
+
+  /// Selects the pet from [_pendingPetId] as soon as pets are available.
+  void _applyPendingPetId() {
+    final id = _pendingPetId;
+    if (id == null) return;
+    final pets = petsNotifier.value;
+    if (pets.isEmpty) return;
+    final match = pets.where((p) => p.id == id).toList();
+    if (match.isNotEmpty) selectedPetNotifier.value = match.first;
+    _pendingPetId = null;
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _checkPendingNavigation();
+      _refresher.tick();
+    }
+  }
+
+  /// Checks shared_preferences for a pending navigation written by the
+  /// notification tap handler (which may run in a background isolate).
+  Future<void> _checkPendingNavigation() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      if (prefs.getBool('pending_medication_nav') != true) return;
+      await prefs.remove('pending_medication_nav');
+      if (!mounted) return;
+
+      // Parse the payload to find out which pet and notification type fired.
+      final payloadStr = prefs.getString('pending_medication_payload');
+      String notifType = 'medication';
+      if (payloadStr != null) {
+        try {
+          final payload = jsonDecode(payloadStr) as Map<String, dynamic>;
+          notifType = payload['type']?.toString() ?? 'medication';
+          final petId = payload['pet_id'];
+          if (petId != null) {
+            final id = petId is int ? petId : int.tryParse(petId.toString());
+            if (id != null) {
+              final pets = petsNotifier.value;
+              final match = pets.where((p) => p.id == id).toList();
+              if (match.isNotEmpty) {
+                selectedPetNotifier.value = match.first;
+              } else {
+                // Pets not loaded yet — apply once petsNotifier fires.
+                _pendingPetId = id;
+              }
+            }
+          }
+        } catch (_) {}
+      }
+
+      if (notifType == 'birthday') {
+        // Switch to the My Pet tab — no push needed.
+        selectedTabNotifier.value = AppTab.myPet;
+      } else {
+        DateTime? initialDate;
+        final dateStr = prefs.getString('pending_medication_date');
+        if (dateStr != null) {
+          initialDate = DateTime.tryParse(dateStr);
+          await prefs.remove('pending_medication_date');
+        }
+        await Navigator.of(context).push(
+          MaterialPageRoute(
+            builder: (_) => MedicationPage(initialDate: initialDate),
+          ),
+        );
+      }
+      await handleBackendNotificationIfPending();
+    } catch (_) {}
   }
 
   void _authListener() {
@@ -38,8 +128,20 @@ class _AppShellState extends State<AppShell> {
   @override
   void dispose() {
     _refresher.stop();
+    WidgetsBinding.instance.removeObserver(this);
     AuthState.instance.removeListener(_authListener);
+    pendingMedicationNavigation.removeListener(_onMedicationNavigation);
+    petsNotifier.removeListener(_applyPendingPetId);
     super.dispose();
+  }
+
+  /// Fast path: fires immediately when the callback ran on the main isolate.
+  void _onMedicationNavigation() {
+    if (pendingMedicationNavigation.value) {
+      pendingMedicationNavigation.value = false;
+      // _checkPendingNavigation will handle the actual push + backend call.
+      _checkPendingNavigation();
+    }
   }
 
   @override
@@ -148,23 +250,26 @@ class _NotificationsButton extends StatelessWidget {
       valueListenable: notificationsNotifier,
       builder: (context, notifications, child) {
         final unreadCount = notifications.where((n) => !n.isRead).length;
-        return Stack(
-          clipBehavior: Clip.none,
-          children: [
-            IconButton(
-              onPressed: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (_) => const NotificationsPage()),
-                );
-              },
-              icon: const Icon(Icons.notifications),
-              tooltip: "notifications",
-            ),
-
-            if (unreadCount > 0)
-              Positioned(right: 1, top: 0, child: _Badge(count: unreadCount)),
-          ],
+        return IconButton(
+          onPressed: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const NotificationsPage()),
+            );
+          },
+          tooltip: "notifications",
+          icon: Stack(
+            clipBehavior: Clip.none,
+            children: [
+              const Icon(Icons.notifications),
+              if (unreadCount > 0)
+                Positioned(
+                  right: -5,
+                  top: -6,
+                  child: _Badge(count: unreadCount),
+                ),
+            ],
+          ),
         );
       },
     );

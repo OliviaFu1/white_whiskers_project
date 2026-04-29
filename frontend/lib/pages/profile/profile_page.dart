@@ -1,8 +1,11 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
-import 'package:frontend/main.dart';
+import 'package:frontend/services/notification_service.dart';
 import 'package:frontend/models/user.dart';
 import 'package:frontend/pages/auth/auth_gate.dart';
+import 'package:frontend/pages/profile/about_page.dart';
+import 'package:frontend/pages/profile/help_support_page.dart';
+import 'package:frontend/pages/profile/notifications_settings_page.dart';
 import 'package:frontend/pages/profile/privacy_page.dart';
 import 'package:frontend/services/api_client.dart';
 import 'package:frontend/services/token_store.dart';
@@ -205,7 +208,12 @@ class _SettingsSection extends StatelessWidget {
                 leading: const Icon(Icons.notifications_outlined),
                 title: const Text('Notifications'),
                 trailing: const Icon(Icons.chevron_right),
-                onTap: () {},
+                onTap: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => const NotificationsSettingsPage(),
+                  ),
+                ),
               ),
               const Divider(height: 1),
               ListTile(
@@ -222,14 +230,20 @@ class _SettingsSection extends StatelessWidget {
                 leading: const Icon(Icons.help_outline),
                 title: const Text('Help & Support'),
                 trailing: const Icon(Icons.chevron_right),
-                onTap: () {},
+                onTap: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const HelpSupportPage()),
+                ),
               ),
               const Divider(height: 1),
               ListTile(
                 leading: const Icon(Icons.info_outline),
                 title: const Text('About'),
                 trailing: const Icon(Icons.chevron_right),
-                onTap: () {},
+                onTap: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const AboutPage()),
+                ),
               ),
             ],
           ),

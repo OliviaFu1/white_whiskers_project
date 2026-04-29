@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../../services/pets_api.dart';
 import '../../services/pet_store.dart';
 import '../../services/token_store.dart';
+import '../../services/notification_service.dart';
 import '../assessment/assessment_page.dart';
 import 'package:frontend/state/notifiers.dart';
 import 'package:frontend/models/pet.dart';
@@ -9,6 +10,8 @@ import '../../services/assessment_api.dart';
 import '../assessment/assessment_results.dart';
 import 'pet_form_page.dart';
 import 'pet_detail_page.dart';
+import '../../services/medication_api.dart';
+import '../medication/pet_medications_page.dart';
 
 class MypetPage extends StatefulWidget {
   const MypetPage({super.key});
@@ -29,8 +32,12 @@ class _MypetPageState extends State<MypetPage> {
   List<Map<String, dynamic>> pets = [];
   final Map<int, Map<String, dynamic>?> _assessmentsByPet = {};
   final Set<int> _loadingAssessmentPetIds = {};
+  final Map<int, List<Map<String, dynamic>>> _medicationsByPet = {};
+  final Set<int> _loadingMedPetIds = {};
 
   final PageController _pageController = PageController();
+  final GlobalKey _carouselSizeKey = GlobalKey();
+  double _carouselHeight = 0;
 
   @override
   void initState() {
@@ -44,6 +51,15 @@ class _MypetPageState extends State<MypetPage> {
     _pageController.dispose();
     selectedPetNotifier.removeListener(_onSelectedPetChanged);
     super.dispose();
+  }
+
+  void _measureCarouselHeight() {
+    if (!mounted) return;
+    final box =
+        _carouselSizeKey.currentContext?.findRenderObject() as RenderBox?;
+    if (box == null) return;
+    final h = box.size.height;
+    if (h > 0 && h != _carouselHeight) setState(() => _carouselHeight = h);
   }
 
   void _onSelectedPetChanged() {
@@ -67,6 +83,9 @@ class _MypetPageState extends State<MypetPage> {
     if (!_assessmentsByPet.containsKey(selectedId)) {
       _loadLatestAssessment(selectedId);
     }
+    if (!_medicationsByPet.containsKey(selectedId)) {
+      _loadMedications(selectedId);
+    }
   }
 
   void _onPageChanged(int index) {
@@ -81,12 +100,17 @@ class _MypetPageState extends State<MypetPage> {
     if (!_assessmentsByPet.containsKey(petId)) {
       _loadLatestAssessment(petId);
     }
+    if (!_medicationsByPet.containsKey(petId)) {
+      _loadMedications(petId);
+    }
     setState(() {}); // rebuild dots
   }
 
   Future<void> _loadPets() async {
     _assessmentsByPet.clear();
     _loadingAssessmentPetIds.clear();
+    _medicationsByPet.clear();
+    _loadingMedPetIds.clear();
 
     try {
       final access = await TokenStore.readAccess();
@@ -108,10 +132,24 @@ class _MypetPageState extends State<MypetPage> {
               id: p["id"] as int,
               name: (p["name"] ?? "").toString(),
               photoUrl: p["photo_url"]?.toString(),
+              isDeceased: p["date_of_death"] != null,
             ),
           )
           .toList();
       petsNotifier.value = petModels;
+
+      // Schedule birthday reminders for all pets.
+      for (final p in petList) {
+        try {
+          await NotificationService.syncBirthdayReminder(
+            p["id"] as int,
+            (p["name"] ?? "your pet").toString(),
+            p["birthdate"]?.toString(),
+            isDeceased: p["date_of_death"] != null,
+            sex: p["sex"]?.toString(),
+          );
+        } catch (_) {}
+      }
 
       // Always refresh selectedPetNotifier from the new list so photoUrl etc. stay current
       final currentId = selectedPetNotifier.value?.id;
@@ -135,6 +173,10 @@ class _MypetPageState extends State<MypetPage> {
         if (selId != null && !_assessmentsByPet.containsKey(selId)) {
           _loadLatestAssessment(selId);
         }
+        if (selId != null && !_medicationsByPet.containsKey(selId)) {
+          _loadMedications(selId);
+        }
+        _measureCarouselHeight();
       });
     } catch (e) {
       if (!mounted) return;
@@ -162,6 +204,25 @@ class _MypetPageState extends State<MypetPage> {
       setState(() {
         _assessmentsByPet[petId] = null;
         _loadingAssessmentPetIds.remove(petId);
+      });
+    }
+  }
+
+  Future<void> _loadMedications(int petId) async {
+    if (!mounted) return;
+    setState(() => _loadingMedPetIds.add(petId));
+    try {
+      final meds = await MedicationApi.listMedications(petId: petId);
+      if (!mounted) return;
+      setState(() {
+        _medicationsByPet[petId] = meds;
+        _loadingMedPetIds.remove(petId);
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _medicationsByPet[petId] = [];
+        _loadingMedPetIds.remove(petId);
       });
     }
   }
@@ -203,6 +264,21 @@ class _MypetPageState extends State<MypetPage> {
           ),
         ),
         const SizedBox(height: 14),
+        if (pets.isNotEmpty)
+          Offstage(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 22),
+              child: Column(
+                key: _carouselSizeKey,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  _petCard(pets.first),
+                  const SizedBox(height: 14),
+                  _historyCard(pets.first, null, false),
+                ],
+              ),
+            ),
+          ),
         if (pets.isEmpty)
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 22),
@@ -210,7 +286,9 @@ class _MypetPageState extends State<MypetPage> {
           )
         else ...[
           SizedBox(
-            height: MediaQuery.sizeOf(context).height * 0.52,
+            height: _carouselHeight > 0
+                ? _carouselHeight
+                : MediaQuery.sizeOf(context).height * 0.52,
             child: PageView.builder(
               controller: _pageController,
               onPageChanged: _onPageChanged,
@@ -219,14 +297,16 @@ class _MypetPageState extends State<MypetPage> {
                 final pet = pets[index];
                 final petId = pet["id"] as int;
                 final assessment = _assessmentsByPet[petId];
-                final isLoading = _loadingAssessmentPetIds.contains(petId);
+                final isLoadingAssessment = _loadingAssessmentPetIds.contains(
+                  petId,
+                );
                 return SingleChildScrollView(
                   padding: const EdgeInsets.symmetric(horizontal: 22),
                   child: Column(
                     children: [
                       _petCard(pet),
                       const SizedBox(height: 14),
-                      _historyCard(pet, assessment, isLoading),
+                      _historyCard(pet, assessment, isLoadingAssessment),
                     ],
                   ),
                 );
@@ -253,6 +333,11 @@ class _MypetPageState extends State<MypetPage> {
                 ),
               ),
               const SizedBox(height: 5),
+              _actionRow(
+                Icons.medication_outlined,
+                "Medications",
+                onTap: _handleViewMedications,
+              ),
               _actionRow(
                 Icons.add_circle_outline,
                 "Add a new pet",
@@ -711,6 +796,35 @@ class _MypetPageState extends State<MypetPage> {
     ).push(MaterialPageRoute(builder: (_) => PetDetailPage(pet: pet)));
     if (!mounted) return;
     await _loadPets();
+  }
+
+  Future<void> _handleViewMedications() async {
+    if (pets.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Please add a pet first.")),
+      );
+      return;
+    }
+    final selectedId = selectedPetNotifier.value?.id;
+    final pet = selectedId != null
+        ? pets.firstWhere(
+            (p) => (p["id"] as int?) == selectedId,
+            orElse: () => pets.first,
+          )
+        : pets.first;
+    final petId = pet["id"] as int;
+    final petName = (pet["name"] ?? "").toString().trim();
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => PetMedicationsPage(
+          petId: petId,
+          petName: petName.isEmpty ? "your pet" : petName,
+        ),
+      ),
+    );
+    if (!mounted) return;
+    _medicationsByPet.remove(petId);
+    _loadMedications(petId);
   }
 
   Future<void> _handleTakeNewTest() async {

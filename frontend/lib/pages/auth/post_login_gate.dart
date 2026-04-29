@@ -64,6 +64,7 @@ class _PostLoginGateState extends State<PostLoginGate> {
                 id: p["id"] as int,
                 name: (p["name"] ?? "Pet") as String,
                 photoUrl: p["photo_url"]?.toString(),
+                isDeceased: p["date_of_death"] != null,
               ),
             )
             .toList();

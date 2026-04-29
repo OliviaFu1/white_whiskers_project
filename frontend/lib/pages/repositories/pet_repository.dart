@@ -15,6 +15,7 @@ class RealPetRepository implements PetRepository {
             id: p["id"] as int,
             name: (p["name"] ?? "").toString(),
             photoUrl: p["photo_url"]?.toString(),
+            isDeceased: p["date_of_death"] != null,
           ),
         )
         .toList();

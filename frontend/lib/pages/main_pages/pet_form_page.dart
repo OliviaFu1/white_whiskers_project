@@ -272,6 +272,18 @@ class _PetFormPageState extends State<PetFormPage> {
           ),
         ),
         iconTheme: const IconThemeData(color: muted),
+        actions: _isEdit
+            ? [
+                TextButton.icon(
+                  icon: const Icon(Icons.delete_outline, color: Colors.red),
+                  label: const Text(
+                    "Delete pet",
+                    style: TextStyle(color: Colors.red),
+                  ),
+                  onPressed: _busy ? null : _handleDelete,
+                ),
+              ]
+            : null,
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 8),
@@ -356,17 +368,15 @@ class _PetFormPageState extends State<PetFormPage> {
               if (_isEdit) ...[
                 const SizedBox(height: 12),
                 TextButton(
-                  onPressed: _busy ? null : _handleDelete,
+                  onPressed: _busy ? null : () => Navigator.of(context).pop(),
                   style: TextButton.styleFrom(
-                    foregroundColor: Colors.red,
+                    foregroundColor: muted,
                     padding: const EdgeInsets.symmetric(vertical: 14),
                   ),
-                  child: _isDeleting
-                      ? const _LoadingIndicator(color: Colors.red)
-                      : const Text(
-                          "Delete pet",
-                          style: TextStyle(fontSize: 15),
-                        ),
+                  child: const Text(
+                    "Discard changes",
+                    style: TextStyle(fontSize: 15),
+                  ),
                 ),
               ],
               const SizedBox(height: 32),
@@ -472,13 +482,48 @@ class _PetFormPageState extends State<PetFormPage> {
           _selectChip(
             "Exact date",
             selected: !_useBirthdateApprox,
-            onTap: () => setState(() => _useBirthdateApprox = false),
+            onTap: () {
+              if (!_useBirthdateApprox) return;
+              // Sync approx → exact: estimate birthdate from entered years/months
+              final years = int.tryParse(_approxYearsCtrl.text.trim()) ?? 0;
+              final months = int.tryParse(_approxMonthsCtrl.text.trim()) ?? 0;
+              if (years > 0 || months > 0) {
+                final today = DateTime.now();
+                int m = today.month - months;
+                int y = today.year - years;
+                while (m <= 0) {
+                  m += 12;
+                  y -= 1;
+                }
+                final d = today.day.clamp(1, DateTime(y, m + 1, 0).day);
+                setState(() {
+                  _birthdate = DateTime(y, m, d);
+                  _useBirthdateApprox = false;
+                });
+              } else {
+                setState(() => _useBirthdateApprox = false);
+              }
+            },
           ),
           const SizedBox(width: 10),
           _selectChip(
             "Approximate age",
             selected: _useBirthdateApprox,
-            onTap: () => setState(() => _useBirthdateApprox = true),
+            onTap: () {
+              if (_useBirthdateApprox) return;
+              // Sync exact → approx: calculate age from selected birthdate
+              if (_birthdate != null) {
+                final today = DateTime.now();
+                int totalMonths =
+                    (today.year - _birthdate!.year) * 12 +
+                    (today.month - _birthdate!.month);
+                if (today.day < _birthdate!.day) totalMonths--;
+                if (totalMonths < 0) totalMonths = 0;
+                _approxYearsCtrl.text = (totalMonths ~/ 12).toString();
+                _approxMonthsCtrl.text = (totalMonths % 12).toString();
+              }
+              setState(() => _useBirthdateApprox = true);
+            },
           ),
         ],
       ),

@@ -26,7 +26,7 @@ load_dotenv(BASE_DIR.parent / ".env")
 # SECURITY WARNING: don't run with debug turned on in production!
 SECRET_KEY = os.getenv("DJANGO_SECRET_KEY", "dev-secret")
 DEBUG = os.getenv("DJANGO_DEBUG", "True") == "True"
-ALLOWED_HOSTS = ["localhost", "127.0.0.1"]
+ALLOWED_HOSTS = ["localhost", "127.0.0.1", "10.0.2.2"]
 
 
 # Application definition
@@ -38,6 +38,7 @@ INSTALLED_APPS = [
     "django.contrib.sessions",
     "django.contrib.messages",
     "django.contrib.staticfiles",
+    "django.contrib.postgres",
     "rest_framework",
     "rest_framework_simplejwt",
     # add new apps here
@@ -46,6 +47,7 @@ INSTALLED_APPS = [
     "notifications",
     "pet_calendar",
     "assessments",
+    "medications",
 ]
 
 AUTH_USER_MODEL = "accounts.User"

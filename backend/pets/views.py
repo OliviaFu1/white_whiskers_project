@@ -5,6 +5,9 @@ from rest_framework.response import Response
 from django.db.models import F
 from .models import Pet, PetUser
 from .serializers import PetSerializer, PetCreateSerializer
+from medications.models import Medication, MedicationLog
+
+_DEATH_NOTE = "auto-completed: pet_death"
 
 
 class PetListCreateView(generics.ListCreateAPIView):
@@ -37,6 +40,63 @@ class PetDetailView(generics.RetrieveUpdateDestroyAPIView):
         return Pet.objects.filter(
             petuser__user=self.request.user
         ).distinct()
+
+    def _sync_medications_for_death_change(self, pet, old_date_of_death):
+        """
+        When a pet's date_of_death transitions between set and None, update
+        the statuses of its medications accordingly.
+        """
+        was_deceased = old_date_of_death is not None
+        is_deceased = pet.date_of_death is not None
+
+        if not was_deceased and is_deceased:
+            # Pet just died — complete all active/paused medications.
+            meds = Medication.objects.filter(
+                pet=pet,
+                status__in=["active", "paused"],
+            )
+            for med in meds:
+                MedicationLog.objects.create(
+                    medication=med,
+                    event_type=MedicationLog.EventType.STATUS_CHANGE,
+                    old_status=med.status,
+                    new_status=Medication.Status.COMPLETED,
+                    notes=_DEATH_NOTE,
+                )
+            meds.update(status=Medication.Status.COMPLETED)
+
+        elif was_deceased and not is_deceased:
+            # Pet marked as living again — revert each auto-completed medication.
+            for med in Medication.objects.filter(pet=pet, status=Medication.Status.COMPLETED):
+                log = (
+                    MedicationLog.objects.filter(
+                        medication=med,
+                        event_type=MedicationLog.EventType.STATUS_CHANGE,
+                        new_status=Medication.Status.COMPLETED,
+                        notes=_DEATH_NOTE,
+                    )
+                    .order_by("-timestamp")
+                    .first()
+                )
+                if log:
+                    Medication.objects.filter(pk=med.pk).update(status=log.old_status)
+                    log.delete()
+
+    def update(self, request, *args, **kwargs):
+        instance = self.get_object()
+        old_date_of_death = instance.date_of_death
+        response = super().update(request, *args, **kwargs)
+        instance.refresh_from_db()
+        self._sync_medications_for_death_change(instance, old_date_of_death)
+        return response
+
+    def partial_update(self, request, *args, **kwargs):
+        instance = self.get_object()
+        old_date_of_death = instance.date_of_death
+        response = super().partial_update(request, *args, **kwargs)
+        instance.refresh_from_db()
+        self._sync_medications_for_death_change(instance, old_date_of_death)
+        return response
 
 
 class PetPhotoView(generics.UpdateAPIView):

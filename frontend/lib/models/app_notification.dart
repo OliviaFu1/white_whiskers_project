@@ -6,6 +6,7 @@ class AppNotification {
   final String message;
   final DateTime createdAt;
   final NotificationType notificationType;
+  final int? petId;
   bool isRead;
 
   AppNotification({
@@ -14,6 +15,7 @@ class AppNotification {
     required this.message,
     required this.createdAt,
     required this.notificationType,
+    this.petId,
     this.isRead = false,
   });
 
@@ -26,8 +28,9 @@ class AppNotification {
       createdAt: DateTime.parse(json['created_at']),
       notificationType: NotificationType.values.firstWhere(
         (e) => e.name == json['notification_type'],
-        orElse: () => NotificationType.medication, // fallback
+        orElse: () => NotificationType.medication,
       ),
+      petId: json['pet_id'] as int?,
     );
   }
 }

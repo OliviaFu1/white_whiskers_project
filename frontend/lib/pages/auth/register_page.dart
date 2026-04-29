@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:frontend/main.dart';
+import 'package:frontend/services/notification_service.dart';
 import 'package:frontend/pages/auth/auth_gate.dart';
 import '../../services/auth_api.dart';
 

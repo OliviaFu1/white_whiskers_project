@@ -1,6 +1,8 @@
+import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 import 'package:flutter/material.dart';
-import 'package:frontend/main.dart';
+import 'package:frontend/services/notification_service.dart';
 import 'package:frontend/pages/auth/auth_gate.dart';
 import 'package:frontend/state/auth_state.dart';
 import 'package:http/http.dart' as http;
@@ -19,6 +21,14 @@ class ApiClient {
   };
 
   static Future<String>? _refreshFuture;
+  static const _timeout = Duration(seconds: 10);
+
+  static Never _throwNetworkError(Object e) {
+    if (e is SocketException || e is TimeoutException) {
+      throw "Cannot reach server. Please check your connection.";
+    }
+    throw e;
+  }
 
   /// GET with refresh+retry
   static Future<http.Response> get(
@@ -29,13 +39,17 @@ class ApiClient {
     if (access == null) throw "No access token.";
 
     final uri = _u(path).replace(queryParameters: queryParameters);
-    final res = await http.get(uri, headers: _headers(access));
+    late http.Response res;
+    try {
+      res = await http.get(uri, headers: _headers(access)).timeout(_timeout);
+    } catch (e) {
+      _throwNetworkError(e);
+    }
 
     if (res.statusCode != 401) return res;
 
     final newAccess = await _refreshAccessLocked();
-    final res2 = await http.get(uri, headers: _headers(newAccess));
-    return res2;
+    return http.get(uri, headers: _headers(newAccess)).timeout(_timeout);
   }
 
   /// POST with refresh+retry
@@ -48,22 +62,23 @@ class ApiClient {
     if (access == null) throw "No access token.";
 
     final uri = _u(path).replace(queryParameters: queryParameters);
+    final encoded = jsonBody == null ? null : jsonEncode(jsonBody);
 
-    final res = await http.post(
-      uri,
-      headers: _headers(access),
-      body: jsonBody == null ? null : jsonEncode(jsonBody),
-    );
+    late http.Response res;
+    try {
+      res = await http
+          .post(uri, headers: _headers(access), body: encoded)
+          .timeout(_timeout);
+    } catch (e) {
+      _throwNetworkError(e);
+    }
 
     if (res.statusCode != 401) return res;
 
     final newAccess = await _refreshAccessLocked();
-
-    return await http.post(
-      uri,
-      headers: _headers(newAccess),
-      body: jsonBody == null ? null : jsonEncode(jsonBody),
-    );
+    return http
+        .post(uri, headers: _headers(newAccess), body: encoded)
+        .timeout(_timeout);
   }
 
   /// PATCH with refresh+retry
@@ -76,26 +91,30 @@ class ApiClient {
     if (access == null) throw "No access token.";
 
     final uri = _u(path).replace(queryParameters: queryParameters);
+    final encoded = jsonBody == null ? null : jsonEncode(jsonBody);
 
-    final res = await http.patch(
-      uri,
-      headers: _headers(access),
-      body: jsonBody == null ? null : jsonEncode(jsonBody),
-    );
+    late http.Response res;
+    try {
+      res = await http
+          .patch(uri, headers: _headers(access), body: encoded)
+          .timeout(_timeout);
+    } catch (e) {
+      _throwNetworkError(e);
+    }
 
     if (res.statusCode != 401) return res;
 
     final newAccess = await _refreshAccessLocked();
-
-    return await http.patch(
-      uri,
-      headers: _headers(newAccess),
-      body: jsonBody == null ? null : jsonEncode(jsonBody),
-    );
+    return http
+        .patch(uri, headers: _headers(newAccess), body: encoded)
+        .timeout(_timeout);
   }
 
   /// Multipart photo upload with refresh+retry
-  static Future<http.Response> uploadPhoto(String filePath, {String mimeType = 'image/jpeg'}) async {
+  static Future<http.Response> uploadPhoto(
+    String filePath, {
+    String mimeType = 'image/jpeg',
+  }) async {
     final access = await TokenStore.readAccess();
     if (access == null) throw "No access token.";
 
@@ -112,22 +131,33 @@ class ApiClient {
     if (access == null) throw "No access token.";
 
     final uri = _u('/api/accounts/me/photo/');
-    final res = await http.delete(uri, headers: _headers(access));
+    late http.Response res;
+    try {
+      res = await http.delete(uri, headers: _headers(access)).timeout(_timeout);
+    } catch (e) {
+      _throwNetworkError(e);
+    }
     if (res.statusCode != 401) return res;
 
     final newAccess = await _refreshAccessLocked();
-    return http.delete(uri, headers: _headers(newAccess));
+    return http.delete(uri, headers: _headers(newAccess)).timeout(_timeout);
   }
 
-  static Future<http.Response> _sendPhotoUpload(String filePath, String mimeType, String token) async {
+  static Future<http.Response> _sendPhotoUpload(
+    String filePath,
+    String mimeType,
+    String token,
+  ) async {
     final uri = _u('/api/accounts/me/photo/');
     final request = http.MultipartRequest('PATCH', uri)
       ..headers['Authorization'] = 'Bearer $token'
-      ..files.add(await http.MultipartFile.fromPath(
-        'photo',
-        filePath,
-        contentType: MediaType.parse(mimeType),
-      ));
+      ..files.add(
+        await http.MultipartFile.fromPath(
+          'photo',
+          filePath,
+          contentType: MediaType.parse(mimeType),
+        ),
+      );
     final streamed = await request.send();
     return http.Response.fromStream(streamed);
   }
@@ -163,6 +193,9 @@ class ApiClient {
       await TokenStore.save(access: newAccess, refresh: refresh);
       return newAccess;
     } catch (e) {
+      if (e is SocketException || e is TimeoutException) {
+        throw "Cannot reach server. Please check your connection.";
+      }
       await AuthState.instance.logout();
       navigatorKey.currentState?.pushAndRemoveUntil(
         MaterialPageRoute(builder: (_) => const AuthGate()),
