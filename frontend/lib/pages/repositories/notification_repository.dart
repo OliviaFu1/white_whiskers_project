@@ -5,6 +5,8 @@ import 'package:frontend/services/api_client.dart';
 abstract class NotificationRepository {
   Future<List<AppNotification>> fetchNotifications();
   Future<void> markRead(String id);
+  Future<void> markUnread(String id);
+  Future<void> delete(String id);
   Future<void> generateTestNotification();
 }
 
@@ -52,6 +54,24 @@ class ApiNotificationRepository implements NotificationRepository {
     );
     if (response.statusCode != 200) {
       throw Exception("Failed to mark read");
+    }
+  }
+
+  @override
+  Future<void> markUnread(String id) async {
+    final response = await ApiClient.patch(
+      "/api/notifications/$id/mark-unread/"
+    );
+    if (response.statusCode != 200) {
+      throw Exception("Failed to mark unread");
+    }
+  }
+
+  @override
+  Future<void> delete(String id) async {
+    final response = await ApiClient.delete("/api/notifications/$id/");
+    if (response.statusCode != 204) {
+      throw Exception("Failed to delete notification");
     }
   }
 

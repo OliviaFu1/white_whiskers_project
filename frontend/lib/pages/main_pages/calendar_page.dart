@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:table_calendar/table_calendar.dart';
-import 'package:frontend/pages/main_pages/medication_page.dart';
+import 'package:frontend/pages/medication/medication_page.dart';
 import 'package:frontend/pages/main_pages/daily_checkin_page.dart';
 import 'package:frontend/pages/main_pages/day_details_page.dart';
 import 'package:frontend/services/calendar_api.dart';

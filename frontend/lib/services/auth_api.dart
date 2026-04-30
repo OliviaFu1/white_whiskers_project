@@ -3,6 +3,8 @@ import 'package:frontend/services/token_store.dart';
 import 'package:http/http.dart' as http;
 import '../config.dart';
 
+const _kTimeout = Duration(seconds: 10);
+
 class AuthApi {
   static Uri _u(String path) => Uri.parse("${AppConfig.apiBaseUrl}$path");
 
@@ -11,15 +13,17 @@ class AuthApi {
     required String password,
     required String password2,
   }) async {
-    final res = await http.post(
-      _u("/api/accounts/register/"),
-      headers: {"Content-Type": "application/json"},
-      body: jsonEncode({
-        "email": email,
-        "password": password,
-        "password2": password2,
-      }),
-    );
+    final res = await http
+        .post(
+          _u("/api/accounts/register/"),
+          headers: {"Content-Type": "application/json"},
+          body: jsonEncode({
+            "email": email,
+            "password": password,
+            "password2": password2,
+          }),
+        )
+        .timeout(_kTimeout);
 
     if (res.statusCode < 200 || res.statusCode >= 300) {
       throw _extractError(res.body) ?? "Register failed (${res.statusCode})";
@@ -30,11 +34,13 @@ class AuthApi {
     required String email,
     required String password,
   }) async {
-    final res = await http.post(
-      _u("/api/accounts/token/"),
-      headers: {"Content-Type": "application/json"},
-      body: jsonEncode({"email": email, "password": password}),
-    );
+    final res = await http
+        .post(
+          _u("/api/accounts/token/"),
+          headers: {"Content-Type": "application/json"},
+          body: jsonEncode({"email": email, "password": password}),
+        )
+        .timeout(_kTimeout);
 
     if (res.statusCode < 200 || res.statusCode >= 300) {
       throw _extractError(res.body) ?? "Login failed (${res.statusCode})";
@@ -44,11 +50,13 @@ class AuthApi {
   }
 
   static Future<String> refreshAccess({required String refreshToken}) async {
-    final res = await http.post(
-      _u("/api/accounts/token/refresh/"),
-      headers: {"Content-Type": "application/json"},
-      body: jsonEncode({"refresh": refreshToken}),
-    );
+    final res = await http
+        .post(
+          _u("/api/accounts/token/refresh/"),
+          headers: {"Content-Type": "application/json"},
+          body: jsonEncode({"refresh": refreshToken}),
+        )
+        .timeout(_kTimeout);
 
     if (res.statusCode < 200 || res.statusCode >= 300) {
       throw _extractError(res.body) ?? "Refresh failed (${res.statusCode})";
