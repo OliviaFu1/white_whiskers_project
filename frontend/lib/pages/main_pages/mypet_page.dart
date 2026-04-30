@@ -699,7 +699,6 @@ class _MypetPageState extends State<MypetPage> {
             const SizedBox(height: 14),
             const Divider(height: 1, color: Color(0xFFEEE8E2)),
             const SizedBox(height: 10),
-            _petCardRow("Medication history", "—"),
             const SizedBox(height: 10),
             const Align(
               alignment: Alignment.centerRight,
