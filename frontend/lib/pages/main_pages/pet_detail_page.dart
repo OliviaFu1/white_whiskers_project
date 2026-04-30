@@ -101,9 +101,47 @@ class _PetDetailPageState extends State<PetDetailPage> {
     }
   }
 
+  Future<void> _handleLeavePet() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+        title: const Text("Leave this pet?"),
+        content: const Text(
+          "You will lose access to this pet and its records.",
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text("Cancel"),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text("Leave"),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true || !mounted) return;
+
+    try {
+      await PetsApi.leavePet(_pet['id'] as int);
+      if (!mounted) return;
+      Navigator.of(context).pop(true);
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text("Could not leave pet: $e")));
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final data = _PetDetailData.fromMap(_pet);
+    final role = (_pet['role'] ?? '').toString();
+    final isOwner = role == 'owner';
 
     return Scaffold(
       backgroundColor: bg,
@@ -121,14 +159,16 @@ class _PetDetailPageState extends State<PetDetailPage> {
           ),
         ),
         iconTheme: const IconThemeData(color: muted),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.edit_outlined),
-            color: muted,
-            tooltip: 'Edit pet',
-            onPressed: _handleEdit,
-          ),
-        ],
+        actions: isOwner
+            ? [
+                IconButton(
+                  icon: const Icon(Icons.edit_outlined),
+                  color: muted,
+                  tooltip: 'Edit pet',
+                  onPressed: _handleEdit,
+                ),
+              ]
+            : [],
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
@@ -141,21 +181,34 @@ class _PetDetailPageState extends State<PetDetailPage> {
             const SizedBox(height: 24),
             _PetInfoCard(data: data),
             const SizedBox(height: 24),
-            TextButton(
-              onPressed: _handleMarkPassed,
-              style: TextButton.styleFrom(
-                foregroundColor: data.dateOfDeath != null
-                    ? muted
-                    : Colors.red.shade400,
-                padding: const EdgeInsets.symmetric(vertical: 12),
+            if (isOwner)
+              TextButton(
+                onPressed: _handleMarkPassed,
+                style: TextButton.styleFrom(
+                  foregroundColor: data.dateOfDeath != null
+                      ? muted
+                      : Colors.red.shade400,
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                ),
+                child: Text(
+                  data.dateOfDeath != null
+                      ? 'Remove date of passing'
+                      : 'My pet has passed away',
+                  style: const TextStyle(fontSize: 14),
+                ),
               ),
-              child: Text(
-                data.dateOfDeath != null
-                    ? 'Remove date of passing'
-                    : 'My pet has passed away',
-                style: const TextStyle(fontSize: 14),
+            if (!isOwner)
+              TextButton(
+                onPressed: _handleLeavePet,
+                style: TextButton.styleFrom(
+                  foregroundColor: Colors.red.shade400,
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                ),
+                child: const Text(
+                  "Leave this pet",
+                  style: TextStyle(fontSize: 14),
+                ),
               ),
-            ),
             const SizedBox(height: 16),
           ],
         ),

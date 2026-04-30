@@ -1,23 +1,27 @@
 import 'package:flutter/material.dart';
 import 'assessment_radar_chart.dart';
+import 'share_assessment_page.dart';
 
 class AssessmentScaleScore {
   final String label;
   final int score; // 1-10
 
-  const AssessmentScaleScore({
-    required this.label,
-    required this.score,
-  });
+  const AssessmentScaleScore({required this.label, required this.score});
 }
 
 class AssessmentResultsPage extends StatelessWidget {
+  final int petId;
+  final int assessmentId;
   final String petName;
+  final String doneByName;
+  final DateTime completedAt;
+
   final int heartScore;
   final int conditionScore;
   final bool significantlyChallenged;
   final List<AssessmentScaleScore> scaleScores;
   final VoidCallback? onDone;
+  final bool canShare;
 
   static const bg = Color(0xFFFBF2EB);
   static const accent = Color(0xFF917869);
@@ -26,11 +30,16 @@ class AssessmentResultsPage extends StatelessWidget {
 
   const AssessmentResultsPage({
     super.key,
+    required this.petId,
+    required this.assessmentId,
     required this.petName,
+    required this.doneByName,
+    required this.completedAt,
     required this.heartScore,
     required this.conditionScore,
     required this.significantlyChallenged,
     required this.scaleScores,
+    required this.canShare,
     this.onDone,
   });
 
@@ -45,11 +54,30 @@ class AssessmentResultsPage extends StatelessWidget {
         foregroundColor: muted,
         title: const Text(
           "Assessment Results",
-          style: TextStyle(
-            color: titleColor,
-            fontWeight: FontWeight.w700,
-          ),
+          style: TextStyle(color: titleColor, fontWeight: FontWeight.w700),
         ),
+        actions: [
+          if (canShare)
+            IconButton(
+              icon: const Icon(Icons.share_outlined),
+              tooltip: "Share",
+              onPressed: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => ShareAssessmentPage(
+                      petId: petId,
+                      assessmentId: assessmentId,
+                      petName: petName,
+                      doneByName: doneByName,
+                      completedAt: completedAt,
+                      heartScore: heartScore,
+                      conditionScore: conditionScore,
+                    ),
+                  ),
+                );
+              },
+            ),
+        ],
       ),
       body: SafeArea(
         child: SingleChildScrollView(
@@ -93,26 +121,72 @@ class AssessmentResultsPage extends StatelessWidget {
               ),
 
               const SizedBox(height: 24),
-              SizedBox(
-                height: 52,
-                child: ElevatedButton(
-                  onPressed: onDone ?? () => Navigator.of(context).pop(),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: accent,
-                    foregroundColor: Colors.white,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(14),
+              Row(
+                children: [
+                  if (canShare) ...[
+                    Expanded(
+                      child: SizedBox(
+                        height: 52,
+                        child: OutlinedButton.icon(
+                          onPressed: () {
+                            Navigator.of(context).push(
+                              MaterialPageRoute(
+                                builder: (_) => ShareAssessmentPage(
+                                  petId: petId,
+                                  assessmentId: assessmentId,
+                                  petName: petName,
+                                  doneByName: doneByName,
+                                  completedAt: completedAt,
+                                  heartScore: heartScore,
+                                  conditionScore: conditionScore,
+                                ),
+                              ),
+                            );
+                          },
+                          icon: const Icon(Icons.share_outlined),
+                          label: const Text(
+                            "Share",
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: accent,
+                            side: const BorderSide(color: accent),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(14),
+                            ),
+                          ),
+                        ),
+                      ),
                     ),
-                    elevation: 0,
-                  ),
-                  child: const Text(
-                    "Done",
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w700,
+                    const SizedBox(width: 12),
+                  ],
+                  Expanded(
+                    child: SizedBox(
+                      height: 52,
+                      child: ElevatedButton(
+                        onPressed: onDone ?? () => Navigator.of(context).pop(),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: accent,
+                          foregroundColor: Colors.white,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(14),
+                          ),
+                          elevation: 0,
+                        ),
+                        child: const Text(
+                          "Done",
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ),
                     ),
                   ),
-                ),
+                ],
               ),
             ],
           ),
@@ -163,9 +237,9 @@ class AssessmentResultsPage extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.12),
+        color: color.withValues(alpha: 0.12),
         borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: color.withOpacity(0.4)),
+        border: Border.all(color: color.withValues(alpha: 0.4)),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -173,10 +247,7 @@ class AssessmentResultsPage extends StatelessWidget {
           Container(
             width: 9,
             height: 9,
-            decoration: BoxDecoration(
-              color: color,
-              shape: BoxShape.circle,
-            ),
+            decoration: BoxDecoration(color: color, shape: BoxShape.circle),
           ),
           const SizedBox(width: 6),
           Text(
@@ -206,11 +277,7 @@ class AssessmentResultsPage extends StatelessWidget {
               rangeLabel: _heartScoreShortLabel(heartScore),
             ),
           ),
-          Container(
-            width: 1,
-            height: 92,
-            color: Colors.grey.shade300,
-          ),
+          Container(width: 1, height: 92, color: Colors.grey.shade300),
           Expanded(
             child: _topScoreBlock(
               title: "Condition Score",
@@ -274,11 +341,7 @@ class AssessmentResultsPage extends StatelessWidget {
         children: [
           const Text(
             "The Heart Score reflects whether there may still be meaningful options to pursue for improving this stage of your pet’s life.",
-            style: TextStyle(
-              fontSize: 14,
-              height: 1.45,
-              color: muted,
-            ),
+            style: TextStyle(fontSize: 14, height: 1.45, color: muted),
           ),
           const SizedBox(height: 14),
           Row(
@@ -315,9 +378,7 @@ class AssessmentResultsPage extends StatelessWidget {
 
   Widget _conditionScaleCard() {
     final challenged =
-        conditionScore >= 30 &&
-        conditionScore <= 90 &&
-        significantlyChallenged;
+        conditionScore >= 30 && conditionScore <= 90 && significantlyChallenged;
 
     return _sectionCard(
       title: "Condition Score Scale",
@@ -326,11 +387,7 @@ class AssessmentResultsPage extends StatelessWidget {
         children: [
           const Text(
             "The Condition Score reflects your pet’s current day-to-day quality of life based on the concerns highlighted in your responses.",
-            style: TextStyle(
-              fontSize: 14,
-              height: 1.45,
-              color: muted,
-            ),
+            style: TextStyle(fontSize: 14, height: 1.45, color: muted),
           ),
           const SizedBox(height: 14),
           Row(
@@ -415,10 +472,7 @@ class AssessmentResultsPage extends StatelessWidget {
     );
   }
 
-  Widget _sectionCard({
-    required String title,
-    required Widget child,
-  }) {
+  Widget _sectionCard({required String title, required Widget child}) {
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(16),
@@ -476,10 +530,7 @@ class AssessmentResultsPage extends StatelessWidget {
   }
 
   String _conditionScoreShortLabel(int score) {
-    final challenged =
-        score >= 30 &&
-        score <= 90 &&
-        significantlyChallenged;
+    final challenged = score >= 30 && score <= 90 && significantlyChallenged;
 
     if (score < 30) return "Range <30";
     if (challenged) return "Significantly challenged";
@@ -507,10 +558,7 @@ class AssessmentResultsPage extends StatelessWidget {
   }
 
   String _conditionScoreRangeTitle(int score) {
-    final challenged =
-        score >= 30 &&
-        score <= 90 &&
-        significantlyChallenged;
+    final challenged = score >= 30 && score <= 90 && significantlyChallenged;
 
     if (score < 30) return "Condition Score Range: <30";
     if (challenged) {
@@ -521,10 +569,7 @@ class AssessmentResultsPage extends StatelessWidget {
   }
 
   String _conditionScoreRangeText(int score) {
-    final challenged =
-        score >= 30 &&
-        score <= 90 &&
-        significantlyChallenged;
+    final challenged = score >= 30 && score <= 90 && significantlyChallenged;
 
     if (score < 30) {
       return "We are never ready to say goodbye and we never want to rob them of those good days. It's important, however, that we not hold on so tightly that we cross the threshold of distress with them.\n\n"

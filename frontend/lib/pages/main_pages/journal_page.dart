@@ -1,9 +1,11 @@
-import 'dart:io';
-
 import 'package:flutter/material.dart';
-import 'package:frontend/pages/app_shell.dart';
-import 'package:frontend/services/pet_store.dart';
+
+import 'package:frontend/models/pet.dart';
+import 'package:frontend/pages/main_pages/add_journal_page.dart';
 import 'package:frontend/services/calendar_api.dart';
+import 'package:frontend/services/pet_store.dart';
+import 'package:frontend/services/pets_api.dart';
+import 'package:frontend/state/notifiers.dart';
 
 class JournalPage extends StatefulWidget {
   const JournalPage({super.key});
@@ -15,368 +17,697 @@ class JournalPage extends StatefulWidget {
 class _JournalPageState extends State<JournalPage> {
   static const bg = Color(0xFFFBF2EB);
   static const accent = Color(0xFF917869);
+  static const titleColor = Color(0xFFD88442);
   static const muted = Color(0xFF676767);
+  static const cardBorder = Color(0xFFF0E4DB);
+  static const chipBg = Color(0xFFF3ECE7);
 
-  late DateTime _selectedDay;
-
-  final _titleCtl = TextEditingController();
-  final _textCtl = TextEditingController();
-
-  String _visibility = "shared";
-  String _tag = "food";
-
-  bool _submitting = false;
+  bool _loadingPet = true;
+  bool _loadingEntries = true;
+  bool _loadingTags = true;
   String? _error;
 
-  // TODO: Placeholder upload
-  File? _pickedImage;
+  List<Map<String, dynamic>> pets = [];
+  List<Map<String, dynamic>> _entries = [];
+  List<Map<String, dynamic>> _tags = [];
 
-  // Day scroller settings, allow up to x days back
-  static const int _dayWindow = 30;
-  late final FixedExtentScrollController _dayController;
+  String? _selectedTag;
+  String _authorFilter = "mine";
 
   @override
   void initState() {
     super.initState();
-    _selectedDay = _dateOnly(DateTime.now());
-    _dayController = FixedExtentScrollController(
-      initialItem: _dayIndexFromDate(_selectedDay).clamp(0, _dayWindow),
-    );
+    selectedPetNotifier.addListener(_onSelectedPetChanged);
+    _init();
   }
 
   @override
   void dispose() {
-    _titleCtl.dispose();
-    _textCtl.dispose();
-    _dayController.dispose();
+    selectedPetNotifier.removeListener(_onSelectedPetChanged);
     super.dispose();
   }
 
-  DateTime _dateOnly(DateTime d) => DateTime(d.year, d.month, d.day);
-
-  int _dayIndexFromDate(DateTime d) {
-    final today = _dateOnly(DateTime.now());
-    final target = _dateOnly(d);
-    return today.difference(target).inDays; // 0=today, 1=yesterday, ...
+  Future<void> _init() async {
+    await _loadPets();
+    await Future.wait([_loadTags(), _loadEntries()]);
   }
 
-  DateTime _dateFromIndex(int idx) {
-    final today = _dateOnly(DateTime.now());
-    return today.subtract(Duration(days: idx));
+  void _onSelectedPetChanged() {
+    final selected = selectedPetNotifier.value;
+    if (selected == null || !mounted) return;
+    PetStore.setCurrentPetId(selected.id);
+    setState(() {});
+    _loadEntries();
   }
 
-  String _yyyyMmDd(DateTime d) =>
-      "${d.year.toString().padLeft(4, '0')}-"
-      "${d.month.toString().padLeft(2, '0')}-"
-      "${d.day.toString().padLeft(2, '0')}";
+  Future<void> _loadPets() async {
+    try {
+      final petList = await PetsApi.listPets();
 
-  String _displayDay(DateTime day) => _yyyyMmDd(_dateOnly(day));
+      final petModels = petList
+          .map(
+            (p) => Pet(
+              id: p["id"] as int,
+              name: (p["name"] ?? "").toString(),
+              photoUrl: p["photo_url"]?.toString(),
+            ),
+          )
+          .toList();
 
-  Future<void> _submit() async {
+      petsNotifier.value = petModels;
+
+      final currentId = selectedPetNotifier.value?.id;
+      final refreshed = currentId != null
+          ? petModels.where((p) => p.id == currentId).firstOrNull
+          : null;
+
+      if (refreshed != null) {
+        selectedPetNotifier.value = refreshed;
+        await PetStore.setCurrentPetId(refreshed.id);
+      } else if (petModels.isNotEmpty) {
+        selectedPetNotifier.value = petModels.first;
+        await PetStore.setCurrentPetId(petModels.first.id);
+      }
+
+      if (!mounted) return;
+      setState(() {
+        pets = petList;
+        _loadingPet = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _error = e.toString();
+        _loadingPet = false;
+      });
+    }
+  }
+
+  Future<void> _loadTags() async {
+    try {
+      final tags = await CalendarApi.listJournalTags();
+      if (!mounted) return;
+      setState(() {
+        _tags = tags;
+        _loadingTags = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _error = e.toString();
+        _loadingTags = false;
+      });
+    }
+  }
+
+  Future<void> _loadEntries() async {
+    final petId = _pet?["id"] as int?;
+    if (petId == null) {
+      if (!mounted) return;
+      setState(() {
+        _entries = [];
+        _loadingEntries = false;
+      });
+      return;
+    }
+
     setState(() {
-      _submitting = true;
+      _loadingEntries = true;
       _error = null;
     });
 
     try {
-      final petId = await PetStore.getCurrentPetId();
-      if (petId == null) throw "No pet selected.";
-
-      final body = <String, dynamic>{
-        "pet_id": petId,
-        "entry_date": _yyyyMmDd(_dateOnly(_selectedDay)),
-        "title": _titleCtl.text.trim(),
-        "text": _textCtl.text.trim(),
-        "photo_url": "",
-        "visibility": _visibility,
-        "tag": _tag,
-      };
-
-      await CalendarApi.createJournalEntry(body: body);
+      final entries = await CalendarApi.listJournalEntries(
+        petId: petId,
+        tag: _selectedTag,
+        authorFilter: _authorFilter,
+      );
 
       if (!mounted) return;
-
-      final popped = await Navigator.of(context).maybePop(true);
-      if (!popped && mounted) {
-        Navigator.of(context).pushReplacement(
-          MaterialPageRoute(builder: (_) => const AppShell()),
-        );
-      }
+      setState(() {
+        _entries = entries;
+        _loadingEntries = false;
+      });
     } catch (e) {
       if (!mounted) return;
-      setState(() => _error = e.toString());
-    } finally {
-      if (mounted) setState(() => _submitting = false);
+      setState(() {
+        _error = e.toString();
+        _loadingEntries = false;
+      });
     }
+  }
+
+  Map<String, dynamic>? get _pet {
+    if (pets.isEmpty) return null;
+
+    final selectedId = selectedPetNotifier.value?.id;
+    if (selectedId == null) return pets.first;
+
+    return pets.firstWhere(
+      (p) => (p["id"] as int?) == selectedId,
+      orElse: () => pets.first,
+    );
+  }
+
+  String get _petNameDisplay {
+    final name = (_pet?["name"] ?? "").toString().trim();
+    return name.isEmpty ? "Your Pet" : name;
+  }
+
+  Future<void> _openAddPage() async {
+    await Navigator.of(
+      context,
+    ).push<bool>(MaterialPageRoute(builder: (_) => const AddJournalPage()));
+
+    await Future.wait([_loadTags(), _loadEntries()]);
+  }
+
+  String _formatDate(String raw) {
+    try {
+      final d = DateTime.parse(raw);
+      final mm = d.month.toString().padLeft(2, '0');
+      final dd = d.day.toString().padLeft(2, '0');
+      return "${d.year}-$mm-$dd";
+    } catch (_) {
+      return raw;
+    }
+  }
+
+  Color _parseHexColor(String? hex, {Color fallback = chipBg}) {
+    if (hex == null) return fallback;
+    final cleaned = hex.trim().replaceFirst('#', '');
+    if (cleaned.length != 6) return fallback;
+
+    try {
+      return Color(int.parse('FF$cleaned', radix: 16));
+    } catch (_) {
+      return fallback;
+    }
+  }
+
+  List<Map<String, dynamic>> _normalizedTags(dynamic rawTags) {
+    if (rawTags is! List) return const [];
+
+    return rawTags
+        .whereType<dynamic>()
+        .map((e) {
+          if (e is Map<String, dynamic>) return e;
+          if (e is Map) return Map<String, dynamic>.from(e);
+          return <String, dynamic>{};
+        })
+        .where((e) => (e["name"] ?? "").toString().trim().isNotEmpty)
+        .toList();
+  }
+
+  String _authorDisplay(Map<String, dynamic> entry) {
+    final author = entry["author"];
+
+    if (author is Map) {
+      final first = (author["first_name"] ?? "").toString().trim();
+      final last = (author["last_name"] ?? "").toString().trim();
+      final full = "$first $last".trim();
+      if (full.isNotEmpty) return full;
+
+      final username = (author["username"] ?? "").toString().trim();
+      if (username.isNotEmpty) return username;
+
+      final name = (author["name"] ?? "").toString().trim();
+      if (name.isNotEmpty) return name;
+    }
+
+    final authorName = (entry["author_name"] ?? "").toString().trim();
+    if (authorName.isNotEmpty) return authorName;
+
+    return "Unknown author";
+  }
+
+  String _entryPreview(Map<String, dynamic> entry) {
+    final text = (entry["text"] ?? "").toString().trim();
+    if (text.isNotEmpty) return text;
+
+    final tags = _normalizedTags(entry["tags"]);
+    if (tags.isNotEmpty) {
+      return tags.map((tag) => "#${tag["name"]}").join("  ");
+    }
+
+    return "No details added";
   }
 
   @override
   Widget build(BuildContext context) {
-    final dayText = _displayDay(_selectedDay);
+    final isLoading = _loadingPet || _loadingTags;
+    final hasNoPets = !isLoading && pets.isEmpty;
 
     return Scaffold(
       backgroundColor: bg,
-      resizeToAvoidBottomInset: true,
-      appBar: AppBar(
-        title: const Text(""),
-        backgroundColor: bg,
-        foregroundColor: muted,
-        elevation: 0,
-      ),
-      bottomNavigationBar: SafeArea(
-        minimum: const EdgeInsets.fromLTRB(18, 0, 18, 12),
-        child: ElevatedButton(
-          onPressed: _submitting ? null : _submit,
-          style: ElevatedButton.styleFrom(
-            backgroundColor: accent,
-            padding: const EdgeInsets.symmetric(vertical: 14),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
-            ),
-          ),
-          child: _submitting
-              ? const SizedBox(
-                  height: 18,
-                  width: 18,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2,
-                    color: Colors.white,
-                  ),
-                )
-              : const Text(
-                  "Save",
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w700,
-                    color: Colors.white,
+      body: SafeArea(
+        bottom: false,
+        child: isLoading
+            ? const Center(child: CircularProgressIndicator())
+            : hasNoPets
+            ? Center(
+                child: Padding(
+                  padding: const EdgeInsets.all(24),
+                  child: Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 22,
+                      vertical: 28,
+                    ),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(color: cardBorder),
+                    ),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(
+                          Icons.menu_book_outlined,
+                          size: 38,
+                          color: accent,
+                        ),
+                        const SizedBox(height: 12),
+                        const Text(
+                          "Add a pet to get started",
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            fontSize: 22,
+                            fontWeight: FontWeight.w800,
+                            color: titleColor,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        const Text(
+                          "Once you add a pet, you can write journal entries, organize notes, and see your family’s entries here.",
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            color: muted,
+                            fontSize: 14,
+                            height: 1.35,
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
+              )
+            : ListView(
+                padding: const EdgeInsets.fromLTRB(18, 8, 18, 18),
+                children: [
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(
+                        child: Text(
+                          "Journal for $_petNameDisplay",
+                          style: const TextStyle(
+                            fontSize: 28,
+                            fontWeight: FontWeight.w800,
+                            color: titleColor,
+                            height: 1.1,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      InkWell(
+                        onTap: _openAddPage,
+                        borderRadius: BorderRadius.circular(16),
+                        child: Container(
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(color: cardBorder),
+                          ),
+                          child: const Icon(Icons.add, color: accent, size: 22),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 14),
+                  _buildAuthorFilters(),
+                  const SizedBox(height: 10),
+                  _buildTagFilters(),
+                  const SizedBox(height: 14),
+                  if (_error != null)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 12),
+                      child: Text(
+                        _error!,
+                        style: const TextStyle(
+                          color: Colors.redAccent,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                  if (_loadingEntries)
+                    const Padding(
+                      padding: EdgeInsets.only(top: 80),
+                      child: Center(child: CircularProgressIndicator()),
+                    )
+                  else if (_entries.isEmpty)
+                    _buildEmptyState()
+                  else
+                    ..._entries.map(_buildEntryCard),
+                ],
+              ),
+      ),
+    );
+  }
+
+  Widget _buildTagFilters() {
+    if (_tags.isEmpty) return const SizedBox.shrink();
+
+    final tagsDisabled = _authorFilter != "mine";
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          child: Opacity(
+            opacity: tagsDisabled ? 0.45 : 1,
+            child: Row(
+              children: _tags.map((tag) {
+                final name = (tag["name"] ?? "").toString().trim();
+                final selected = _selectedTag == name;
+                final color = _parseHexColor(tag["color"]?.toString());
+
+                return Padding(
+                  padding: const EdgeInsets.only(right: 8),
+                  child: GestureDetector(
+                    onTap: tagsDisabled
+                        ? null
+                        : () {
+                            setState(() {
+                              _selectedTag = selected ? null : name;
+                            });
+                            _loadEntries();
+                          },
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 13,
+                        vertical: 9,
+                      ),
+                      decoration: BoxDecoration(
+                        color: selected
+                            ? color.withValues(alpha: 0.18)
+                            : color.withValues(alpha: 0.05),
+                        borderRadius: BorderRadius.circular(999),
+                        border: Border.all(
+                          color: selected
+                              ? color
+                              : color.withValues(alpha: 0.5),
+                          width: 1.2,
+                        ),
+                      ),
+                      child: Text(
+                        name,
+                        style: TextStyle(
+                          color: color,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
+                  ),
+                );
+              }).toList(),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildAuthorFilters() {
+    const filters = ["mine", "others", "all"];
+
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: Row(
+        children: filters.map((value) {
+          return Padding(
+            padding: const EdgeInsets.only(right: 8),
+            child: _buildAuthorFilterChip(value),
+          );
+        }).toList(),
+      ),
+    );
+  }
+
+  Widget _buildAuthorFilterChip(String value) {
+    final selected = _authorFilter == value;
+
+    return GestureDetector(
+      onTap: () {
+        if (_authorFilter == value) return;
+
+        setState(() {
+          _authorFilter = value;
+
+          if (value != "mine") {
+            _selectedTag = null;
+          }
+        });
+
+        _loadEntries();
+      },
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 9),
+        decoration: BoxDecoration(
+          color: selected ? accent.withValues(alpha: 0.15) : chipBg,
+          borderRadius: BorderRadius.circular(999),
+          border: Border.all(
+            color: selected ? accent : Colors.transparent,
+            width: 1.2,
+          ),
+        ),
+        child: Text(
+          value,
+          style: TextStyle(
+            color: selected ? accent : muted,
+            fontWeight: FontWeight.w700,
+          ),
         ),
       ),
-      body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(18),
-          keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              _card(
-                child: Row(
+    );
+  }
+
+  Widget _buildEmptyState() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 28),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: cardBorder),
+      ),
+      child: Column(
+        children: [
+          const Icon(Icons.menu_book_outlined, size: 34, color: accent),
+          const SizedBox(height: 10),
+          const Text(
+            "No journal entries yet",
+            style: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.w800,
+              color: titleColor,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            "Tap the + button to add one for $_petNameDisplay.",
+            textAlign: TextAlign.center,
+            style: const TextStyle(
+              color: muted,
+              fontSize: 14,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _openEditPage(Map<String, dynamic> entry) async {
+    await Navigator.of(context).push<bool>(
+      MaterialPageRoute(builder: (_) => AddJournalPage(entry: entry)),
+    );
+
+    await Future.wait([_loadTags(), _loadEntries()]);
+  }
+
+  Widget _buildEntryCard(Map<String, dynamic> entry) {
+    final title = (entry["title"] ?? "").toString().trim();
+    final displayTitle = title.isEmpty ? "Untitled entry" : title;
+
+    final date = _formatDate((entry["entry_date"] ?? "").toString());
+    final photoUrl = (entry["photo_url"] ?? "").toString().trim();
+
+    final author = _authorDisplay(entry);
+    final isMine = entry["is_mine"] == true;
+
+    final rawTags = entry["tags"];
+    final tags = (rawTags is List)
+        ? rawTags
+              .whereType<dynamic>()
+              .map((e) {
+                if (e is Map<String, dynamic>) return e;
+                if (e is Map) return Map<String, dynamic>.from(e);
+                return <String, dynamic>{};
+              })
+              .where((e) => (e["name"] ?? "").toString().trim().isNotEmpty)
+              .toList()
+        : <Map<String, dynamic>>[];
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: cardBorder),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // --- TITLE ---
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Icon(Icons.event, color: muted, size: 18),
-                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        displayTitle,
+                        style: const TextStyle(
+                          fontSize: 17,
+                          fontWeight: FontWeight.w800,
+                          color: Colors.black87,
+                        ),
+                      ),
+                    ),
+                    if (isMine)
+                      IconButton(
+                        icon: const Icon(Icons.edit_outlined, size: 20),
+                        color: muted,
+                        tooltip: "Edit journal",
+                        visualDensity: const VisualDensity(
+                          horizontal: -4,
+                          vertical: -4,
+                        ),
+                        padding: EdgeInsets.zero,
+                        constraints: const BoxConstraints(),
+                        onPressed: () => _openEditPage(entry),
+                      ),
+                  ],
+                ),
+
+                const SizedBox(height: 4),
+
+                // --- DATE + AUTHOR ---
+                Row(
+                  children: [
                     Text(
-                      dayText,
+                      date,
                       style: const TextStyle(
-                        fontSize: 16,
                         color: muted,
                         fontWeight: FontWeight.w600,
                       ),
                     ),
-                    const Spacer(),
-                    SizedBox(
-                      width: 120,
-                      height: 90,
-                      child: ListWheelScrollView.useDelegate(
-                        controller: _dayController,
-                        itemExtent: 30,
-                        physics: const FixedExtentScrollPhysics(),
-                        onSelectedItemChanged: (idx) {
-                          final newDay = _dateFromIndex(idx);
-                          setState(() => _selectedDay = newDay);
-                        },
-                        childDelegate: ListWheelChildBuilderDelegate(
-                          childCount: _dayWindow + 1,
-                          builder: (context, idx) {
-                            final d = _dateFromIndex(idx);
-                            final label = idx == 0
-                                ? "Today"
-                                : idx == 1
-                                    ? "Yesterday"
-                                    : _yyyyMmDd(d);
-                            return Center(
-                              child: Text(
-                                label,
-                                style: const TextStyle(
-                                  color: muted,
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
-                            );
-                          },
+                    const SizedBox(width: 5),
+                    Flexible(
+                      child: Text(
+                        "By $author",
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: muted,
+                          fontWeight: FontWeight.w600,
+                          fontSize: 13,
                         ),
                       ),
                     ),
                   ],
                 ),
-              ),
 
-              const SizedBox(height: 12),
+                // --- TAGS ---
+                if (tags.isNotEmpty) ...[
+                  const SizedBox(height: 10),
+                  Wrap(
+                    spacing: 6,
+                    runSpacing: 6,
+                    children: tags.map((tag) {
+                      final name = (tag["name"] ?? "").toString().trim();
 
-              // Title
-              _card(
-                child: TextField(
-                  controller: _titleCtl,
-                  textInputAction: TextInputAction.next,
-                  decoration: const InputDecoration(
-                    border: InputBorder.none,
-                    hintText: "Title",
-                  ),
-                ),
-              ),
+                      final color = _parseHexColor(tag["color"]?.toString());
 
-              const SizedBox(height: 12),
-
-              // Tag + text
-              _card(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
-                      children: [
-                        _tagChip("food", "Food"),
-                        _tagChip("sleep", "Sleep"),
-                        _tagChip("med", "Med"),
-                        _tagChip("symptoms", "Symptoms"),
-                      ],
-                    ),
-                    const SizedBox(height: 10),
-                    SizedBox(
-                      height: 170,
-                      child: TextField(
-                        controller: _textCtl,
-                        maxLines: null,
-                        keyboardType: TextInputType.multiline,
-                        decoration: const InputDecoration(
-                          border: InputBorder.none,
-                          hintText: "Write a note…",
+                      return Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 6,
                         ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-
-              const SizedBox(height: 12),
-
-              // Image upload + visibility
-              Row(
-                children: [
-                  Expanded(
-                    child: _card(
-                      child: SizedBox(
-                        height: 100,
-                        child: Container(
-                          decoration: BoxDecoration(
-                            borderRadius: BorderRadius.circular(10),
-                            border: Border.all(
-                              color: muted.withValues(),
-                              width: 1.2,
-                            ),
-                          ),
-                          alignment: Alignment.center,
-                          child: const Text(
-                            "Photo placeholder",
-                            style: TextStyle(
-                              color: muted,
-                              fontWeight: FontWeight.w600,
-                            ),
+                        decoration: BoxDecoration(
+                          color: color.withValues(alpha: 0.14),
+                          borderRadius: BorderRadius.circular(999),
+                          border: Border.all(
+                            color: color.withValues(alpha: 0.7),
+                            width: 1.3,
                           ),
                         ),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  SizedBox(
-                    width: 140,
-                    child: _card(
-                      child: DropdownButtonHideUnderline(
-                        child: DropdownButton<String>(
-                          value: _visibility,
-                          isExpanded: true,
-                          items: const [
-                            DropdownMenuItem(
-                              value: "shared",
-                              child: Text("Shared"),
-                            ),
-                            DropdownMenuItem(
-                              value: "private",
-                              child: Text("Private"),
-                            ),
-                          ],
-                          onChanged: _submitting
-                              ? null
-                              : (v) =>
-                                  setState(() => _visibility = v ?? "shared"),
+                        child: Text(
+                          name,
+                          style: TextStyle(
+                            color: color,
+                            fontWeight: FontWeight.w700,
+                            fontSize: 12.5,
+                          ),
                         ),
-                      ),
-                    ),
+                      );
+                    }).toList(),
                   ),
                 ],
-              ),
 
-              if (_pickedImage != null) ...[
                 const SizedBox(height: 10),
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(12),
-                  child: Image.file(
-                    _pickedImage!,
-                    height: 160,
-                    fit: BoxFit.cover,
+
+                // --- PREVIEW TEXT ---
+                Text(
+                  _entryPreview(entry),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: muted,
+                    height: 1.35,
+                    fontSize: 14,
                   ),
                 ),
               ],
-
-              if (_error != null) ...[
-                const SizedBox(height: 10),
-                Text(_error!, style: const TextStyle(color: Colors.redAccent)),
-              ],
-
-              const SizedBox(height: 12),
-            ],
+            ),
           ),
-        ),
-      ),
-    );
-  }
 
-  Widget _tagChip(String value, String label) {
-    final selected = _tag == value;
-    return InkWell(
-      onTap: _submitting ? null : () => setState(() => _tag = value),
-      borderRadius: BorderRadius.circular(999),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-        decoration: BoxDecoration(
-          color: selected ? const Color(0xFFEFE7E1) : const Color(0xFFF7F5F3),
-          borderRadius: BorderRadius.circular(999),
-          border: selected ? Border.all(color: Colors.black, width: 1.2) : null,
-        ),
-        child: Text(
-          label,
-          style: const TextStyle(color: muted, fontWeight: FontWeight.w700),
-        ),
-      ),
-    );
-  }
-
-  Widget _card({required Widget child}) {
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        boxShadow: const [
-          BoxShadow(
-            blurRadius: 10,
-            offset: Offset(0, 5),
-            color: Color(0x22000000),
-          ),
+          // --- IMAGE ---
+          if (photoUrl.isNotEmpty) ...[
+            const SizedBox(width: 12),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(14),
+              child: Image.network(
+                photoUrl,
+                width: 84,
+                height: 84,
+                fit: BoxFit.cover,
+                errorBuilder: (_, _, _) => Container(
+                  width: 84,
+                  height: 84,
+                  color: chipBg,
+                  alignment: Alignment.center,
+                  child: const Icon(Icons.image_not_supported_outlined),
+                ),
+              ),
+            ),
+          ],
         ],
       ),
-      child: child,
     );
   }
 }

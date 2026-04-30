@@ -7,11 +7,12 @@ import 'package:frontend/pages/assessment/assessment_page.dart';
 import 'package:frontend/services/pet_store.dart';
 import 'package:frontend/state/notifiers.dart';
 import 'onboarding_widget.dart';
-import '../../services/auth_api.dart';
 import '../../services/pets_api.dart';
-import '../../services/token_store.dart';
+import '../../services/account_api.dart';
 
 enum AgeInputMode { age, birthdate }
+
+enum OnboardingPath { newPet, joinByCode }
 
 class OnboardingFlow extends StatefulWidget {
   const OnboardingFlow({super.key});
@@ -28,6 +29,18 @@ class _OnboardingFlowState extends State<OnboardingFlow> {
 
   final _controller = PageController();
   int _page = 0;
+
+  // onboarding path related
+  OnboardingPath? onboardingPath;
+  bool _pathTouched = false;
+
+  final shareCodeController = TextEditingController();
+  bool _shareCodeTouched = false;
+  bool _joiningByCode = false;
+  String? _joinCodeError;
+
+  bool get _pathValid => onboardingPath != null;
+  bool get _shareCodeValid => shareCodeController.text.trim().isNotEmpty;
 
   // answers
   final ownerName = TextEditingController();
@@ -100,13 +113,7 @@ class _OnboardingFlowState extends State<OnboardingFlow> {
     });
 
     try {
-      final access = await TokenStore.readAccess();
-      if (access == null) throw "Session expired. Please log in again.";
-
-      final data = await AuthApi.updateMe(
-        accessToken: access,
-        name: ownerName.text.trim(),
-      );
+      final data = await AccountApi.updateMe(name: ownerName.text.trim());
       userNotifier.value = User.fromJson(data);
 
       if (!mounted) return;
@@ -167,27 +174,23 @@ class _OnboardingFlowState extends State<OnboardingFlow> {
       }
 
       // Reload user and pets into notifiers so AppShell has fresh data.
-      final access2 = await TokenStore.readAccess();
-      if (access2 != null) {
-        final userData = await AuthApi.me(accessToken: access2);
-        userNotifier.value = User.fromJson(userData);
+      final userData = await AccountApi.getMe();
+      userNotifier.value = User.fromJson(userData);
 
-        final rawPets = await PetsApi.listPets();
-        if (rawPets.isNotEmpty) {
-          await PetStore.setCurrentPetId(rawPets.first["id"] as int);
-          final pets = rawPets
-              .map(
-                (p) => Pet(
-                  id: p["id"] as int,
-                  name: (p["name"] ?? "Pet") as String,
-                  photoUrl: p["photo_url"]?.toString(),
-                  isDeceased: p["date_of_death"] != null,
-                ),
-              )
-              .toList();
-          petsNotifier.value = pets;
-          selectedPetNotifier.value = pets.first;
-        }
+      final rawPets = await PetsApi.listPets();
+      if (rawPets.isNotEmpty) {
+        await PetStore.setCurrentPetId(rawPets.first["id"] as int);
+        final pets = rawPets
+            .map(
+              (p) => Pet(
+                id: p["id"] as int,
+                name: (p["name"] ?? "Pet").toString(),
+                photoUrl: p["photo_url"]?.toString(),
+              ),
+            )
+            .toList();
+        petsNotifier.value = pets;
+        selectedPetNotifier.value = pets.first;
       }
 
       if (!mounted) return;
@@ -213,12 +216,77 @@ class _OnboardingFlowState extends State<OnboardingFlow> {
     }
   }
 
+  Future<void> _reloadUserAndPetsAndGoHome({int? preferredPetId}) async {
+    final userData = await AccountApi.getMe();
+    userNotifier.value = User.fromJson(userData);
+
+    final rawPets = await PetsApi.listPets();
+    if (rawPets.isNotEmpty) {
+      final pets = rawPets
+          .map(
+            (p) => Pet(
+              id: p["id"] as int,
+              name: (p["name"] ?? "Pet").toString(),
+              photoUrl: p["photo_url"]?.toString(),
+            ),
+          )
+          .toList();
+
+      petsNotifier.value = pets;
+
+      final selected = preferredPetId != null
+          ? pets.firstWhere(
+              (p) => p.id == preferredPetId,
+              orElse: () => pets.first,
+            )
+          : pets.first;
+
+      await PetStore.setCurrentPetId(selected.id);
+      selectedPetNotifier.value = selected;
+    } else {
+      petsNotifier.value = [];
+      selectedPetNotifier.value = null;
+    }
+
+    if (!mounted) return;
+
+    Navigator.of(context).pushAndRemoveUntil(
+      MaterialPageRoute(builder: (_) => const AppShell()),
+      (route) => false,
+    );
+  }
+
+  Future<void> _joinExistingPetByCode() async {
+    if (_joiningByCode) return;
+
+    setState(() {
+      _joiningByCode = true;
+      _joinCodeError = null;
+    });
+
+    try {
+      final joinedPet = await PetsApi.joinPetByCode(
+        shareCode: shareCodeController.text.trim(),
+      );
+      final joinedPetId = joinedPet["id"] as int?;
+
+      await _reloadUserAndPetsAndGoHome(preferredPetId: joinedPetId);
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _joiningByCode = false;
+        _joinCodeError = e.toString();
+      });
+    }
+  }
+
   @override
   void dispose() {
     _controller.dispose();
     ownerName.dispose();
     petName.dispose();
     breed.dispose();
+    shareCodeController.dispose();
     super.dispose();
   }
 
@@ -269,30 +337,93 @@ class _OnboardingFlowState extends State<OnboardingFlow> {
           ),
         ),
 
-        // 1) pet name (required)
+        // 1) choose onboarding type
         OnboardingStepScaffold(
           title:
-              "Hello ${ownerName.text.trim().isEmpty ? "" : "${ownerName.text.trim()}!"}\nWhat’s your pet’s name?",
+              "Hello ${ownerName.text.trim().isEmpty ? "" : "${ownerName.text.trim()}!"}\nHow would you like to get started?",
           showBack: true,
           onBack: _back,
-          canNext: _petValid,
+          canNext: _pathValid,
           onNext: _next,
-          helperError: (_petTouched && !_petValid)
-              ? "Pet name is required"
+          helperError: (_pathTouched && !_pathValid)
+              ? "Please choose one option"
               : null,
           bg: bg,
           titleColor: titleColor,
           accent: accent,
           muted: muted,
-          field: UnderlineTextInput(
-            controller: petName,
-            label: "Pet’s Name",
-            lineColor: muted,
-            onChanged: (_) => setState(() => _petTouched = true),
+          field: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              _OnboardingOptionCard(
+                title: "Add a new pet",
+                subtitle: "Create a pet profile and continue onboarding.",
+                selected: onboardingPath == OnboardingPath.newPet,
+                onTap: () => setState(() {
+                  _pathTouched = true;
+                  onboardingPath = OnboardingPath.newPet;
+                }),
+                accent: accent,
+                muted: muted,
+              ),
+              const SizedBox(height: 12),
+              _OnboardingOptionCard(
+                title: "Join with pet code",
+                subtitle: "Become a family member of an existing pet.",
+                selected: onboardingPath == OnboardingPath.joinByCode,
+                onTap: () => setState(() {
+                  _pathTouched = true;
+                  onboardingPath = OnboardingPath.joinByCode;
+                }),
+                accent: accent,
+                muted: muted,
+              ),
+            ],
           ),
         ),
 
-        // 2) species (required)
+        // 2) join code OR pet name
+        OnboardingStepScaffold(
+          title: onboardingPath == OnboardingPath.joinByCode
+              ? "Enter the pet code"
+              : "What’s your pet’s name?",
+          showBack: true,
+          onBack: _back,
+          canNext: onboardingPath == OnboardingPath.joinByCode
+              ? _shareCodeValid
+              : _petValid,
+          onNext: onboardingPath == OnboardingPath.joinByCode
+              ? _joinExistingPetByCode
+              : _next,
+          helperError: onboardingPath == OnboardingPath.joinByCode
+              ? (_joinCodeError ??
+                    ((_shareCodeTouched && !_shareCodeValid)
+                        ? "Pet code is required"
+                        : null))
+              : ((_petTouched && !_petValid) ? "Pet name is required" : null),
+          bg: bg,
+          titleColor: titleColor,
+          accent: accent,
+          muted: muted,
+          field: onboardingPath == OnboardingPath.joinByCode
+              ? UnderlineTextInput(
+                  controller: shareCodeController,
+                  label: "Pet code",
+                  lineColor: muted,
+                  onChanged: (_) => setState(() {
+                    _shareCodeTouched = true;
+                    _joinCodeError = null;
+                  }),
+                )
+              : UnderlineTextInput(
+                  controller: petName,
+                  label: "Pet’s Name",
+                  lineColor: muted,
+                  onChanged: (_) => setState(() => _petTouched = true),
+                ),
+        ),
+
+        // 3) species (required)
         OnboardingStepScaffold(
           title: "What species is $_petLabel?",
           showBack: true,
@@ -321,7 +452,7 @@ class _OnboardingFlowState extends State<OnboardingFlow> {
           ),
         ),
 
-        // 3) sex + spayed/neutered (both required)
+        // 4) sex + spayed/neutered (required)
         OnboardingStepScaffold(
           title: "Great!\nTell us about $_petLabel",
           showBack: true,
@@ -354,7 +485,7 @@ class _OnboardingFlowState extends State<OnboardingFlow> {
           ),
         ),
 
-        // 4) breed (required)
+        // 5) breed (required)
         OnboardingStepScaffold(
           title: "What breed is $_petLabel?",
           showBack: true,
@@ -376,7 +507,7 @@ class _OnboardingFlowState extends State<OnboardingFlow> {
           ),
         ),
 
-        // 5) age OR birthdate
+        // 6) age OR birthdate
         OnboardingStepScaffold(
           title: "How old is $_petLabel?",
           showBack: true,
@@ -424,7 +555,7 @@ class _OnboardingFlowState extends State<OnboardingFlow> {
           ),
         ),
 
-        // 6) final page
+        // 7) final page
         OnboardingStepScaffold(
           title: "You’re All Set!\nReady to take your\nfirst assessment?",
           showBack: false,
@@ -731,6 +862,79 @@ class _BirthDateField extends StatelessWidget {
           ),
         ),
         child: Text(text),
+      ),
+    );
+  }
+}
+
+class _OnboardingOptionCard extends StatelessWidget {
+  final String title;
+  final String subtitle;
+  final bool selected;
+  final VoidCallback onTap;
+  final Color accent;
+  final Color muted;
+
+  const _OnboardingOptionCard({
+    required this.title,
+    required this.subtitle,
+    required this.selected,
+    required this.onTap,
+    required this.accent,
+    required this.muted,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      borderRadius: BorderRadius.circular(16),
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 160),
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: selected ? const Color(0xFFF7EADF) : Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: selected ? accent : const Color(0xFFE7DDD5),
+            width: selected ? 1.4 : 1,
+          ),
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Icon(
+              selected ? Icons.radio_button_checked : Icons.radio_button_off,
+              color: selected ? accent : muted,
+              size: 20,
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w700,
+                      color: selected ? accent : muted,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    subtitle,
+                    style: TextStyle(
+                      fontSize: 13,
+                      height: 1.3,
+                      color: muted.withValues(alpha: 0.9),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

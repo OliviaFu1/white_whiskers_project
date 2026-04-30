@@ -7,6 +7,7 @@ import 'package:frontend/pages/profile/about_page.dart';
 import 'package:frontend/pages/profile/help_support_page.dart';
 import 'package:frontend/pages/profile/notifications_settings_page.dart';
 import 'package:frontend/pages/profile/privacy_page.dart';
+import 'package:frontend/pages/profile/manage_family_members_page.dart';
 import 'package:frontend/services/api_client.dart';
 import 'package:frontend/services/token_store.dart';
 import 'package:frontend/state/auth_state.dart';
@@ -223,6 +224,18 @@ class _SettingsSection extends StatelessWidget {
                 onTap: () => Navigator.push(
                   context,
                   MaterialPageRoute(builder: (_) => const PrivacyPage()),
+                ),
+              ),
+              const Divider(height: 1),
+              ListTile(
+                leading: const Icon(Icons.group_outlined),
+                title: const Text('Manage family members'),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => const ManageFamilyMembersPage(),
+                  ),
                 ),
               ),
               const Divider(height: 1),

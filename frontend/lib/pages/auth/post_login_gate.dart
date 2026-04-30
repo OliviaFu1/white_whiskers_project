@@ -8,8 +8,7 @@ import 'package:frontend/services/pet_store.dart';
 import 'package:frontend/services/pets_api.dart';
 import 'package:frontend/state/auth_state.dart';
 import 'package:frontend/state/notifiers.dart';
-import '../../services/auth_api.dart';
-import '../../services/token_store.dart';
+import '../../services/account_api.dart';
 import '../onboarding/onboarding_flow.dart';
 
 class PostLoginGate extends StatefulWidget {
@@ -49,10 +48,7 @@ class _PostLoginGateState extends State<PostLoginGate> {
 
   Future<void> _loadMe() async {
     try {
-      final access = await TokenStore.readAccess();
-      if (access == null) throw "No access token found.";
-
-      final data = await AuthApi.me(accessToken: access);
+      final data = await AccountApi.getMe();
       userNotifier.value = User.fromJson(data);
 
       final rawPets = await PetsApi.listPets();
@@ -62,7 +58,7 @@ class _PostLoginGateState extends State<PostLoginGate> {
             .map(
               (p) => Pet(
                 id: p["id"] as int,
-                name: (p["name"] ?? "Pet") as String,
+                name: (p["name"] ?? "Pet").toString(),
                 photoUrl: p["photo_url"]?.toString(),
                 isDeceased: p["date_of_death"] != null,
               ),
@@ -70,13 +66,18 @@ class _PostLoginGateState extends State<PostLoginGate> {
             .toList();
         petsNotifier.value = pets;
         selectedPetNotifier.value = pets.first;
+      } else {
+        petsNotifier.value = [];
+        selectedPetNotifier.value = null;
       }
 
+      if (!mounted) return;
       setState(() {
         me = data;
         isLoading = false;
       });
     } catch (e) {
+      if (!mounted) return;
       setState(() {
         errorText = e.toString();
         isLoading = false;

@@ -5,13 +5,23 @@ import 'package:frontend/pages/main_pages/daily_checkin_page.dart';
 
 class DayDetailsPage extends StatefulWidget {
   final DateTime date;
-  const DayDetailsPage({super.key, required this.date});
+  final int? petId;
+  final String? petName;
+
+  const DayDetailsPage({
+    super.key,
+    required this.date,
+    this.petId,
+    this.petName,
+  });
 
   @override
   State<DayDetailsPage> createState() => _DayDetailsPageState();
 }
 
 class _DayDetailsPageState extends State<DayDetailsPage> {
+  Map<String, dynamic>? _myCheckin;
+
   static const muted = Color(0xFF676767);
   static const bg = Color(0xFFFBF2EB);
   static const accent = Color(0xFF917869);
@@ -86,15 +96,23 @@ class _DayDetailsPageState extends State<DayDetailsPage> {
         date: yyyyMmDd,
       );
 
+      final myCheckins = await CalendarApi.listDailyCheckins(
+        petId: petId,
+        date: yyyyMmDd,
+        mineOnly: true,
+      );
+
       final journals = await CalendarApi.listJournalEntries(
         petId: petId,
         date: yyyyMmDd,
       );
 
       if (!mounted) return;
+
       setState(() {
         _checkins = checkins;
         _journals = journals;
+        _myCheckin = myCheckins.isNotEmpty ? myCheckins.first : null;
       });
     } catch (e) {
       if (!mounted) return;
@@ -104,11 +122,21 @@ class _DayDetailsPageState extends State<DayDetailsPage> {
     }
   }
 
-  Future<void> _openAddCheckin() async {
+  Future<void> _openCheckinEditor() async {
     if (_isFuture(_currentDay)) return;
 
+    final proceed = await _confirmOldCheckinIfNeeded();
+    if (!proceed || !mounted) return;
+
     final changed = await Navigator.of(context).push<bool>(
-      MaterialPageRoute(builder: (_) => DailyCheckinPage(date: _currentDay)),
+      MaterialPageRoute(
+        builder: (_) => DailyCheckinPage(
+          date: _currentDay,
+          showAllPets: false,
+          petId: widget.petId,
+          petName: widget.petName,
+        ),
+      ),
     );
 
     if (changed == true) {
@@ -117,11 +145,14 @@ class _DayDetailsPageState extends State<DayDetailsPage> {
     }
   }
 
+  String get _petNameDisplay {
+    final name = (widget.petName ?? "").trim();
+    return name.isEmpty ? "Your pet" : name;
+  }
+
   // ---------- UI ----------
   @override
   Widget build(BuildContext context) {
-    final title = _fmt(_currentDay);
-
     return PopScope(
       canPop: false,
       onPopInvokedWithResult: (didPop, result) {
@@ -132,10 +163,14 @@ class _DayDetailsPageState extends State<DayDetailsPage> {
       child: Scaffold(
         backgroundColor: bg,
         appBar: AppBar(
-          title: Text(title),
           backgroundColor: bg,
           foregroundColor: muted,
-          elevation: 0,
+          title: Text(
+            "${_fmt(_currentDay)} for $_petNameDisplay",
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
+          ),
         ),
 
         body: PageView.builder(
@@ -165,35 +200,33 @@ class _DayDetailsPageState extends State<DayDetailsPage> {
               );
             }
 
-            return RefreshIndicator(
-              onRefresh: () => _loadForDay(_currentDay),
-              child: ListView(
-                padding: const EdgeInsets.all(16),
-                children: [
-                  Row(
-                    children: [
-                      _sectionTitle("Daily check-in"),
-                      const Spacer(),
+            return ListView(
+              padding: const EdgeInsets.all(16),
+              children: [
+                Row(
+                  children: [
+                    _sectionTitle("Daily check-in"),
+                    const Spacer(),
+                    if (_myCheckin == null)
                       IconButton(
                         icon: const Icon(Icons.add),
                         color: muted,
                         tooltip: "Add check-in",
-                        onPressed: _openAddCheckin,
+                        onPressed: _openCheckinEditor,
                       ),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-                  _buildCheckinCard(),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                _buildCheckinCard(),
 
-                  const SizedBox(height: 16),
+                const SizedBox(height: 16),
 
-                  _sectionTitle("Journals"),
-                  const SizedBox(height: 8),
-                  ..._buildJournalCards(),
-                  if (_journals.isEmpty)
-                    _emptyCard("No journal entries for this day."),
-                ],
-              ),
+                _sectionTitle("Journals"),
+                const SizedBox(height: 8),
+                ..._buildJournalCards(),
+                if (_journals.isEmpty)
+                  _emptyCard("No journal entries for this day."),
+              ],
             );
           },
         ),
@@ -249,6 +282,7 @@ class _DayDetailsPageState extends State<DayDetailsPage> {
     final rating = (c["day_rating"] ?? "neutral").toString();
     final notes = (c["notes"] ?? "").toString().trim();
     final author = _displayAuthor(c);
+    final isMine = _myCheckin != null && c["id"] == _myCheckin!["id"];
 
     return Padding(
       padding: const EdgeInsets.only(bottom: 10),
@@ -270,6 +304,19 @@ class _DayDetailsPageState extends State<DayDetailsPage> {
                     overflow: TextOverflow.ellipsis,
                   ),
                 ),
+                if (isMine)
+                  IconButton(
+                    icon: const Icon(Icons.edit_outlined, size: 20),
+                    color: muted,
+                    tooltip: "Edit check-in",
+                    visualDensity: const VisualDensity(
+                      horizontal: -4,
+                      vertical: -4,
+                    ),
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(),
+                    onPressed: _openCheckinEditor,
+                  ),
               ],
             ),
             if (notes.isNotEmpty) ...[
@@ -308,6 +355,42 @@ class _DayDetailsPageState extends State<DayDetailsPage> {
     return name;
   }
 
+  Future<bool> _confirmOldCheckinIfNeeded() async {
+    final daysOld = _today.difference(_dateOnly(_currentDay)).inDays;
+
+    if (daysOld < 7) return true;
+
+    final shouldProceed = await showDialog<bool>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          backgroundColor: Colors.white,
+          title: const Text("Add check-in for an older day?"),
+          content: Text(
+            "This day was $daysOld days ago, so memory can be less accurate. Do you want to proceed anyway?",
+            style: const TextStyle(color: muted),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text("Cancel", style: TextStyle(color: muted)),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.of(context).pop(true),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: accent,
+                foregroundColor: Colors.white,
+              ),
+              child: const Text("Proceed"),
+            ),
+          ],
+        );
+      },
+    );
+
+    return shouldProceed == true;
+  }
+
   // ------- Journal rendering -------
 
   List<Widget> _buildJournalCards() {
@@ -320,6 +403,7 @@ class _DayDetailsPageState extends State<DayDetailsPage> {
       final visibility = (j["visibility"] ?? "").toString().trim();
       final date = _displayEntryDate(j["entry_date"]);
       final author = _displayAuthor(j);
+      final photoUrl = (j["photo_url"] ?? "").toString().trim();
 
       return Padding(
         padding: const EdgeInsets.only(bottom: 10),
@@ -359,8 +443,48 @@ class _DayDetailsPageState extends State<DayDetailsPage> {
                   ),
                 ),
               ],
+              if (photoUrl.isNotEmpty) ...[
+                const SizedBox(height: 10),
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(12),
+                  child: Image.network(
+                    photoUrl,
+                    width: double.infinity,
+                    height: 180,
+                    fit: BoxFit.cover,
+                    errorBuilder: (context, error, stackTrace) {
+                      return Container(
+                        height: 180,
+                        width: double.infinity,
+                        alignment: Alignment.center,
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFF7F5F3),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: const Text(
+                          "Failed to load image",
+                          style: TextStyle(color: muted),
+                        ),
+                      );
+                    },
+                    loadingBuilder: (context, child, loadingProgress) {
+                      if (loadingProgress == null) return child;
+                      return Container(
+                        height: 180,
+                        width: double.infinity,
+                        alignment: Alignment.center,
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFF7F5F3),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: const CircularProgressIndicator(),
+                      );
+                    },
+                  ),
+                ),
+              ],
               if (text.isNotEmpty) ...[
-                const SizedBox(height: 8),
+                const SizedBox(height: 10),
                 Text(text, style: const TextStyle(color: muted)),
               ],
             ],
@@ -398,6 +522,9 @@ class _DayDetailsPageState extends State<DayDetailsPage> {
   }
 
   Future<int> _getCurrentPetId() async {
+    final passedPetId = widget.petId;
+    if (passedPetId != null) return passedPetId;
+
     final petId = await PetStore.getCurrentPetId();
     if (petId == null) throw "No pet selected.";
     return petId;
