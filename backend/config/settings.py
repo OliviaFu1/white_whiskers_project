@@ -14,6 +14,7 @@ from datetime import timedelta
 import os
 from pathlib import Path
 from dotenv import load_dotenv
+import dj_database_url
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -25,8 +26,10 @@ load_dotenv(BASE_DIR.parent / ".env")
 # SECURITY WARNING: keep the secret key used in production secret!
 # SECURITY WARNING: don't run with debug turned on in production!
 SECRET_KEY = os.getenv("DJANGO_SECRET_KEY", "dev-secret")
-DEBUG = os.getenv("DJANGO_DEBUG", "True") == "True"
-ALLOWED_HOSTS = ["localhost", "127.0.0.1", "10.0.2.2"]
+DEBUG = os.getenv("DJANGO_DEBUG", "False") == "True"
+
+_allowed = os.getenv("ALLOWED_HOSTS", "localhost,127.0.0.1,10.0.2.2")
+ALLOWED_HOSTS = [h.strip() for h in _allowed.split(",")]
 
 
 # Application definition
@@ -54,6 +57,7 @@ AUTH_USER_MODEL = "accounts.User"
 
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
+    "whitenoise.middleware.WhiteNoiseMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
@@ -93,16 +97,20 @@ REST_FRAMEWORK = {
 # Database
 # https://docs.djangoproject.com/en/6.0/ref/settings/#databases
 
-DATABASES = {
-    "default": {
-        "ENGINE": "django.db.backends.postgresql",
-        "NAME": os.getenv("POSTGRES_DB", os.getenv("DB_NAME")),
-        "USER": os.getenv("POSTGRES_USER", os.getenv("DB_USER")),
-        "PASSWORD": os.getenv("POSTGRES_PASSWORD", os.getenv("DB_PASSWORD")),
-        "HOST": os.getenv("POSTGRES_HOST", os.getenv("DB_HOST", "localhost")),
-        "PORT": os.getenv("POSTGRES_PORT", os.getenv("DB_PORT", "5432")),
+_database_url = os.getenv("DATABASE_URL")
+if _database_url:
+    DATABASES = {"default": dj_database_url.parse(_database_url, conn_max_age=600)}
+else:
+    DATABASES = {
+        "default": {
+            "ENGINE": "django.db.backends.postgresql",
+            "NAME": os.getenv("PGDATABASE", os.getenv("POSTGRES_DB", os.getenv("DB_NAME"))),
+            "USER": os.getenv("PGUSER", os.getenv("POSTGRES_USER", os.getenv("DB_USER"))),
+            "PASSWORD": os.getenv("PGPASSWORD", os.getenv("POSTGRES_PASSWORD", os.getenv("DB_PASSWORD"))),
+            "HOST": os.getenv("PGHOST", os.getenv("POSTGRES_HOST", os.getenv("DB_HOST", "localhost"))),
+            "PORT": os.getenv("PGPORT", os.getenv("POSTGRES_PORT", os.getenv("DB_PORT", "5432"))),
+        }
     }
-}
 
 
 # Password validation
@@ -141,6 +149,7 @@ USE_TZ = True
 
 STATIC_URL = "static/"
 STATIC_ROOT = BASE_DIR / "staticfiles"
+STATICFILES_STORAGE = "whitenoise.storage.CompressedManifestStaticFilesStorage"
 
 MEDIA_URL = "/media/"
 MEDIA_ROOT = BASE_DIR / "media"
