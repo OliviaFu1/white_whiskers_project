@@ -31,6 +31,11 @@ DEBUG = os.getenv("DJANGO_DEBUG", "False") == "True"
 _allowed = os.getenv("ALLOWED_HOSTS", "localhost,127.0.0.1,10.0.2.2")
 ALLOWED_HOSTS = [h.strip() for h in _allowed.split(",")]
 
+# Automatically trust Railway-generated domains
+_railway_domain = os.getenv("RAILWAY_PUBLIC_DOMAIN")
+if _railway_domain and _railway_domain not in ALLOWED_HOSTS:
+    ALLOWED_HOSTS.append(_railway_domain)
+
 
 # Application definition
 
