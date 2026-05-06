@@ -79,7 +79,7 @@ class _LoginPageState extends State<LoginPage> {
             children: [
               const SizedBox(height: 70),
               const Text(
-                'Welcome to xxx',
+                'Welcome to White Whiskers',
                 textAlign: TextAlign.center,
                 style: TextStyle(
                   fontSize: 30,
